@@ -207,6 +207,13 @@ def dispatch_candidates(wo_id: int, db: Session = Depends(get_read_db)) -> dict[
             "note": "Ranked by a transparent score; a supervisor must confirm the assignment."}
 
 
+@router.get("/work-orders/{wo_id}/verification")
+def verification_preview(wo_id: int, db: Session = Depends(get_read_db)) -> dict[str, Any]:
+    """Live Layer 7 window: samples collected so far and the criteria evaluated on them."""
+    from app.modules.verification import service as verification
+    return verification.evaluate(db, workflow.get_wo(db, wo_id))
+
+
 @router.post("/work-orders/{wo_id}/acknowledge-escalation")
 def acknowledge_escalation(wo_id: int, body: ActionIn, actor: Actor = Depends(current_actor)) -> dict[str, Any]:
     def run(c: Ctx) -> dict[str, Any]:
@@ -304,3 +311,22 @@ def adjust_stock(body: AdjustIn, actor: Actor = Depends(current_actor)) -> dict[
         c.after = {"sku": body.sku, "delta": body.delta, "balance_after": m.balance_after}
         return {"sku": body.sku, "balance_after": m.balance_after}
     return execute(actor, "inventory.adjust", "inventory.adjust", "inventory", body.sku, run)
+
+
+# --------------------------------------------------------------------------- analytics
+@router.get("/analytics/maintenance")
+def analytics_maintenance(db: Session = Depends(get_read_db)) -> dict[str, Any]:
+    from app.modules.analytics import service as analytics
+    return analytics.maintenance_metrics(db)
+
+
+@router.get("/analytics/detector")
+def analytics_detector(db: Session = Depends(get_read_db)) -> dict[str, Any]:
+    from app.modules.analytics import service as analytics
+    return analytics.detector_metrics(db)
+
+
+@router.get("/analytics/assets")
+def analytics_assets(db: Session = Depends(get_read_db)) -> dict[str, Any]:
+    from app.modules.analytics import service as analytics
+    return analytics.asset_metrics(db)
