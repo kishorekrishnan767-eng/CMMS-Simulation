@@ -1,0 +1,51 @@
+# Versioned risk / decision policy. DEMO VALUES — configurable per asset, NOT taken from any standard.
+# Changing a threshold means adding policy_v2.yaml (new version string) and an audit entry;
+# thresholds are never changed automatically (no auto-retraining).
+version: "policy_v1"
+description: "Demo risk policy for TwinCMMS"
+
+severity_weight:        # S
+  LOW: 0.25
+  MEDIUM: 0.50
+  HIGH: 0.75
+  CRITICAL: 1.00
+
+criticality_weight:     # C
+  LOW: 0.30
+  MEDIUM: 0.60
+  HIGH: 1.00
+
+persistence_samples: 20     # P = min(1, consecutive_anomalous_samples / 20)
+slope_critical: 6.0         # mm/s per hour; R = min(1, slope / slope_critical)
+
+quality_multiplier:         # Q
+  good: 1.0
+  degraded: 0.7             # any corroborating sensor stale / suspect
+
+weights:
+  severity: 0.40
+  criticality: 0.25
+  persistence: 0.20
+  rate: 0.15
+
+# risk = 100 * (0.40*S + 0.25*C + 0.20*P + 0.15*R) * (0.5 + 0.5*Q)
+decision_table:             # evaluated top-down; first match wins
+  - { name: URGENT_HUMAN_REVIEW, min_risk: 75, or_severity: CRITICAL, priority: P1,
+      approval: "Supervisor + notify all operators" }
+  - { name: INSPECT_URGENT, min_risk: 55, priority: P2, approval: "Supervisor" }
+  - { name: INSPECT, min_risk: 30, priority: P3, approval: "Supervisor" }
+  - { name: MONITOR, min_risk: 0, priority: null, approval: "none" }
+
+priority_rank: { P1: 1, P2: 2, P3: 3, P4: 4 }
+
+failure_modes:
+  VIBRATION_RISE:
+    label: "Vibration rise (possible bearing degradation)"
+    metric: vibration_velocity
+    parts:                  # reserved on assignment
+      - { sku: BRG-001, quantity: 1 }
+      - { sku: GRS-001, quantity: 1 }
+
+safety_note: >
+  This system never stops equipment automatically. For P1 events the supervisor is asked to follow
+  the site safety procedure.

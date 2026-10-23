@@ -1,0 +1,15 @@
+# Optional PostgreSQL for running against Postgres instead of the default SQLite.
+#   docker compose up -d db
+#   set DATABASE_URL=postgresql+psycopg://twin:twin@localhost:5432/twincmms in backend/.env
+#   pip install -r backend/requirements-postgres.txt
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: twin
+      POSTGRES_PASSWORD: twin
+      POSTGRES_DB: twincmms
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+volumes:
+  pgdata:
