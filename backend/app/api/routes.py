@@ -127,6 +127,7 @@ def asset_telemetry(
     to: str | None = None,
     hours: float = Query(default=3.0, gt=0, le=72),
     max_points: int = Query(default=600, ge=10, le=5000),
+    band: bool = False,
     db: Session = Depends(get_read_db),
 ) -> dict[str, Any]:
     sensor = db.scalar(select(Sensor).where(Sensor.asset_id == asset_id, Sensor.metric == metric))
@@ -143,8 +144,25 @@ def asset_telemetry(
     stride = max(1, len(rows) // max_points)
     pts = [{"id": r.id, "t": clock.iso(r.timestamp), "v": r.value, "q": r.quality, "status": r.status}
            for i, r in enumerate(rows) if i % stride == 0 or r.quality != "GOOD" or i == len(rows) - 1]
-    return {"asset_id": asset_id, "sensor_id": sensor.id, "metric": metric, "unit": sensor.unit,
-            "from": clock.iso(start), "to": clock.iso(end), "count": len(rows), "points": pts, "simulated": True}
+    out: dict[str, Any] = {"asset_id": asset_id, "sensor_id": sensor.id, "metric": metric, "unit": sensor.unit,
+                           "from": clock.iso(start), "to": clock.iso(end), "count": len(rows), "points": pts,
+                           "simulated": True}
+    if band:
+        # Load-adjusted baseline band (expected ± 3.5σ) from the detector's current baseline.
+        from app.models import DetectorState
+        st = db.scalar(select(DetectorState).where(DetectorState.asset_id == asset_id, DetectorState.metric == metric))
+        spd = {r.timestamp: r.value for r in db.execute(
+            select(TelemetryReading.timestamp, TelemetryReading.value).join(Sensor, Sensor.id == TelemetryReading.sensor_id)
+            .where(TelemetryReading.asset_id == asset_id, Sensor.metric == "speed_command",
+                   TelemetryReading.timestamp >= start, TelemetryReading.timestamp <= end))}
+        if st is not None and st.sigma is not None and st.baseline_a is not None:
+            by_id = {r.id: r.timestamp for r in rows}
+            for p in out["points"]:
+                load = spd.get(by_id.get(p["id"]), 80.0) / 100.0
+                exp = st.baseline_a + st.baseline_b * load
+                p["exp"], p["lo"], p["hi"] = round(exp, 4), round(exp - 3.5 * st.sigma, 4), round(exp + 3.5 * st.sigma, 4)
+            out["baseline"] = {"a": st.baseline_a, "b": st.baseline_b, "sigma": st.sigma, "state": st.state}
+    return out
 
 
 @router.get("/telemetry/rejected")
