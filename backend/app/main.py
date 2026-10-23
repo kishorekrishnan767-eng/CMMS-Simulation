@@ -53,8 +53,9 @@ def create_app() -> FastAPI:
             "code": "validation_error", "message": "Request validation failed",
             "details": {"errors": [{"loc": list(e["loc"]), "msg": e["msg"]} for e in exc.errors()]}}})
 
-    from app.api import routes
+    from app.api import routes, routes_cmms
     app.include_router(routes.router)
+    app.include_router(routes_cmms.router)
     app.include_router(routes.ws_router)
 
     @app.get("/api/health")

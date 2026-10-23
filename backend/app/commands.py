@@ -44,6 +44,7 @@ def execute(
     *,
     correlation_id: str | None = None,
     drain: bool = True,
+    audit_allowed: bool = True,
 ) -> T:
     info = AuditInfo(action=action, target_type=target_type, target_id=target_id, correlation_id=correlation_id)
     try:
@@ -57,11 +58,12 @@ def execute(
             with write_session() as s:
                 ctx = Ctx(session=s, actor=actor, target_id=target_id, correlation_id=correlation_id)
                 result = fn(ctx)
-                audit.record(s, actor, action, target_type, ctx.target_id, "ALLOWED",
-                             before=ctx.before, after=ctx.after, correlation_id=ctx.correlation_id)
+                if audit_allowed:  # workflow transitions write their own ALLOWED row atomically
+                    audit.record(s, actor, action, target_type, ctx.target_id, "ALLOWED",
+                                 before=ctx.before, after=ctx.after, correlation_id=ctx.correlation_id)
         except DomainError as e:
-            info.target_id = info.target_id or (ctx.target_id if "ctx" in locals() else None)
             if "ctx" in locals():
+                info.target_id = ctx.target_id or info.target_id
                 info.correlation_id = ctx.correlation_id or info.correlation_id
                 info.before = ctx.before
             audit.record_denied(actor, info, e.message)
