@@ -35,7 +35,7 @@ EVENT_LAYERS: dict[str, int] = {
     "AssetRegistered": 1,
     "SimulationReset": 2, "SimulationControl": 2, "FaultInjected": 2, "RepairApplied": 2,
     "TelemetryAccepted": 3, "TelemetryRejected": 3, "DataQualityWarning": 3,
-    "AnomalyWatch": 4, "AnomalyDetected": 4, "AnomalyEscalated": 4, "AnomalyCleared": 4,
+    "AnomalyWatch": 4, "HealthStateChanged": 4, "AnomalyCorroborated": 4, "AnomalyDetected": 4, "AnomalyEscalated": 4, "AnomalyCleared": 4,
     "RiskAssessed": 5, "WorkOrderDrafted": 5, "EvidenceAttached": 5, "PriorityEscalationProposed": 5,
     "PriorityEscalationAcknowledged": 6,
     "WorkOrderApproved": 6, "WorkOrderRejected": 6, "WorkOrderCancelled": 6, "TechnicianAssigned": 6,

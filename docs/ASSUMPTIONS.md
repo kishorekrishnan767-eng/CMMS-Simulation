@@ -52,3 +52,15 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
     as "limit not reached (prevented)" together with the detection-to-repair interval.
 19. **Labour cost** = hours in `IN_PROGRESS` × technician hourly rate (seeded); parts cost = Σ consumed
     quantity × unit cost.
+20. **Repair effectiveness is one-shot.** The configured value applies to the *next* repair and then
+    reverts to 1.0, so the failed-repair demo (0.4) can be followed by a proper second repair.
+21. **Detector deviations from the literal spec** (all documented in `monitoring/detector.py`):
+    (a) the load slope `b` is fitted on a longer healthy history (≤24 h, 1 sample in 5) with ridge
+    shrinkage toward a generic prior when load spread is small; the intercept `a` and `σ` still come from
+    the 120-sample window — a pure 120-sample OLS drifted and produced false anomalies once the window
+    froze during WATCH; (b) the slope trigger for WATCH additionally needs the mean z of the last 3
+    samples ≥ 1.5, otherwise noise alone enters WATCH ~4 % of the time.
+22. **Extra Layer 4 events** beyond the spec list: `HealthStateChanged` (every state change),
+    `AnomalyWatch` (entering WATCH) and `AnomalyCorroborated` (a corroborating metric newly agrees).
+23. **Verification settle period.** After a repair the simulated degradation decays with τ = 5 min, so the
+    30-sample verification window starts after a 30-minute settle (6τ).
