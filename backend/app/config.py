@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     sim_tick_seconds: float = 0.2
     # Upper bound of sim minutes processed per tick, so a slow machine degrades speed, not latency.
     sim_max_minutes_per_tick: int = 12
+    # Wall-clock pacing multiplier of the guided demo (1.0 = cinematic, 0 = as fast as possible).
+    demo_pace: float = 1.0
 
     @property
     def cors_origin_list(self) -> list[str]:

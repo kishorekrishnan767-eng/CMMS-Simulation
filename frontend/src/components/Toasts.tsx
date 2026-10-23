@@ -11,8 +11,8 @@ export default function Toasts() {
     return () => timers.forEach(window.clearTimeout);
   }, [toasts, dismiss]);
   return (
-    <div className="pointer-events-none fixed bottom-24 right-3 z-50 flex w-[min(92vw,360px)] flex-col gap-2" aria-live="polite" data-testid="toasts">
-      {toasts.map((t) => (
+    <div className="pointer-events-none fixed left-1/2 top-16 z-50 flex w-[min(92vw,380px)] -translate-x-1/2 flex-col gap-2" aria-live="polite" data-testid="toasts">
+      {toasts.slice(-3).map((t) => (
         <div key={t.id} className={`toast glass pointer-events-auto rounded-lg border-l-4 border px-3 py-2 shadow-xl ${COLORS[t.kind]}`} role="status">
           <div className="flex items-start justify-between gap-2">
             <div className="text-[13px] font-semibold">{t.title}</div>

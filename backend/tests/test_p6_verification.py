@@ -105,6 +105,8 @@ def test_analytics_are_computed_from_stored_data(client, auth):
         assert e.mtta_min == (w.approved_at - a.detected_at).total_seconds() / 60
         assert e.mttr_min == (w.verified_at - a.detected_at).total_seconds() / 60
         lat, mtta, mttr, before, after = e.detection_latency_min, e.mtta_min, e.mttr_min, e.before_mean, e.after_mean
+        assert e.details["lead_time_basis"] in ("observed", "counterfactual")
+        assert e.lead_time_min is not None and e.lead_time_min > 0    # detected before the (actual or would-be) alarm crossing
     assert det["avg_detection_latency_min"] == round(lat, 2)
     assert mt["mtta_min"] == round(mtta, 2) and mt["mttr_min"] == round(mttr, 2)
     assert mt["closed"] == 1 and mt["labour_cost"] > 0 and mt["parts_cost"] == 199.5     # 185 + 14.5

@@ -8,7 +8,7 @@ import { BUILD_D, BUILD_W, hourOfDay, mulberry32, occupancyAt, sunElevation } fr
 
 export const QUALITY = {
   low: { dpr: 1, shadow: 0, env: false, blocks: 24, trees: 0, mullions: false, bloom: false, haze: false, shadowMap: 512 },
-  medium: { dpr: 1.5, shadow: 1, env: true, blocks: 56, trees: 46, mullions: true, bloom: false, haze: true, shadowMap: 1024 },
+  medium: { dpr: 1.25, shadow: 1, env: false, blocks: 56, trees: 46, mullions: true, bloom: false, haze: true, shadowMap: 1024 },
   high: { dpr: 2, shadow: 2, env: true, blocks: 96, trees: 130, mullions: true, bloom: true, haze: true, shadowMap: 2048 },
 } as const;
 
@@ -83,7 +83,16 @@ export function SkyAndLight() {
     };
   }, [scene, fog]);
 
+  const frameNo = useRef(0);
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false; // refreshed every few frames below: sun and machines move slowly
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl]);
+
   useFrame(() => {
+    if (frameNo.current++ % 20 === 0) gl.shadowMap.needsUpdate = true;
     const ms = simNowMs();
     const elev = sunElevation(ms);
     const { zenith, horizon, day } = skyColors(elev);
@@ -168,7 +177,7 @@ export function City() {
     const out: { x: number; z: number; w: number; d: number; h: number; tone: number }[] = [];
     let guard = 0;
     while (out.length < q.blocks && guard++ < 5000) {
-      const r = 55 + rnd() * 190;
+      const r = 78 + rnd() * 180;
       const a = rnd() * Math.PI * 2;
       const x = Math.cos(a) * r * 1.25;
       const z = Math.sin(a) * r;
@@ -176,7 +185,7 @@ export function City() {
       const w = 10 + rnd() * 16;
       const d = 10 + rnd() * 16;
       if (out.some((b) => Math.abs(b.x - x) < (b.w + w) / 2 + 3 && Math.abs(b.z - z) < (b.d + d) / 2 + 3)) continue;
-      out.push({ x, z, w, d, h: 8 + Math.pow(rnd(), 1.8) * 58, tone: rnd() });
+      out.push({ x, z, w, d, h: 8 + Math.pow(rnd(), 1.9) * 46, tone: rnd() });
     }
     return out;
   }, [q.blocks]);

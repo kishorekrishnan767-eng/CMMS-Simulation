@@ -15,6 +15,8 @@ from typing import Any, Callable
 
 from fastapi.testclient import TestClient
 
+from app.config import get_settings
+
 DEMO_PASSWORD = "demo1234"
 ASSET = "AHU-02-FAN-01"
 CLOSURE = {"work_verified": True, "area_safe_and_clean": True, "documentation_complete": True, "parts_reconciled": True}
@@ -66,7 +68,7 @@ class Director:
         self.error: str | None = None
         self.log: list[dict[str, Any]] = []
         self.results: dict[int, dict[str, Any]] = {}
-        self.pace = 1.0               # >1 slows pacing (more visible), <1 speeds it up (tests use 0)
+        self.pace = get_settings().demo_pace   # >1 slows pacing (more visible), 0 = as fast as possible
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
         self._api: "Api | None" = None

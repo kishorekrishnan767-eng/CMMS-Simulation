@@ -9,7 +9,7 @@ happen only via a new versioned policy file plus an audit entry.
 from __future__ import annotations
 
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta
 from statistics import mean
 from typing import Any
 
@@ -50,6 +50,10 @@ def record_evaluation(session: Session, envelope: dict[str, Any]) -> None:
     crossing = session.scalar(select(func.min(TelemetryReading.timestamp)).where(
         TelemetryReading.asset_id == wo.asset_id, TelemetryReading.metric == "vibration_velocity",
         TelemetryReading.value >= asset.alarm_limit, TelemetryReading.timestamp > fault.started_at))
+    lead_basis = "observed" if crossing is not None else None
+    if crossing is None:
+        crossing = _counterfactual_crossing(session, fault, asset)
+        lead_basis = "counterfactual" if crossing is not None else "never_crossed"
     labour = 0.0
     for rec in session.scalars(select(InspectionRecord).where(InspectionRecord.work_order_id == wo.id)):
         tech = session.get(Technician, rec.technician_id)
@@ -78,13 +82,38 @@ def record_evaluation(session: Session, envelope: dict[str, Any]) -> None:
         before_mean=round(float(mean(before)), 3) if before else None, after_mean=round(float(mean(after)), 3) if after else None,
         details={"repairs": wo.repair_count, "first_time_fix": wo.repair_count == 1,
                  "alarm_limit": asset.alarm_limit, "mtta_assigned_min": _mins(anomaly.detected_at, wo.assigned_at),
-                 "alarm_never_crossed": crossing is None,
+                 "lead_time_basis": lead_basis,
+                 "lead_time_note": {"observed": "time between detection and the alarm limit actually being crossed",
+                                    "counterfactual": "the work was done before the limit was reached; lead time uses when the injected fault "
+                                                      "(ground truth) would have crossed the alarm limit if left unrepaired",
+                                    "never_crossed": "the injected fault would never have reached the alarm limit"}[lead_basis],
                  "detection_to_repair_min": _mins(anomaly.detected_at, wo.completed_at)},
         computed_at=now)
     session.add(ev)
     session.flush()
     bus.publish(session, "EvaluationRecorded", asset_id=wo.asset_id, correlation_id=wo.incident_id,
                 payload={"evaluation_id": ev.id, **eval_dict(ev)})
+
+
+def _counterfactual_crossing(session: Session, fault: FaultInjection, asset: Asset) -> datetime | None:
+    """When would the injected wear have pushed vibration to the alarm limit, had nobody intervened?
+
+    Solves  v_healthy + A·((t − t0)/T)^p = alarm_limit  using the stored fault parameters (ground truth)
+    and the mean healthy vibration observed in the hour before the fault started.
+    """
+    p = fault.params
+    A, power, T = float(p.get("amplitude", 7.0)), float(p.get("exponent", 2.0)), float(p.get("duration_h", 1.5))
+    base = session.scalars(select(TelemetryReading.value).where(
+        TelemetryReading.asset_id == fault.asset_id, TelemetryReading.metric == "vibration_velocity",
+        TelemetryReading.timestamp <= fault.started_at,
+        TelemetryReading.timestamp > fault.started_at - timedelta(hours=1))).all()
+    if not base:
+        return None
+    needed = asset.alarm_limit - float(mean(base))
+    if needed <= 0 or needed > A * 1.15:
+        return None
+    hours = T * (needed / A) ** (1.0 / power)
+    return fault.started_at + timedelta(hours=hours)
 
 
 def eval_dict(e: Evaluation) -> dict[str, Any]:

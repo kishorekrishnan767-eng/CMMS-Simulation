@@ -130,7 +130,7 @@ export function useAct() {
 export function Drawer({ open, onClose, title, children, width = 640 }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; width?: number }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="Details">
+    <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex justify-end" role="dialog" aria-label="Details">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative flex h-full w-full flex-col border-l border-line bg-panel shadow-2xl" style={{ maxWidth: width }}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">

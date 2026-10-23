@@ -31,7 +31,7 @@ export default function AnalyticsPage() {
     >
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-4" data-testid="kpis">
         <Kpi id="latency" label="Detection latency" value={fmtMin(d.avg_detection_latency_min)} hint="fault start → anomaly detected" />
-        <Kpi id="lead" label="Lead time before alarm limit" value={d.avg_lead_time_min == null ? "—" : fmtMin(d.avg_lead_time_min)} hint="detected → alarm limit crossed (per closed incident)" />
+        <Kpi id="lead" label="Lead time before alarm limit" value={d.avg_lead_time_min == null ? "—" : fmtMin(d.avg_lead_time_min)} hint="detected → alarm limit crossed (or would have been, if repaired earlier)" />
         <Kpi id="mtta" label="MTTA" value={fmtMin(m.mtta_min)} hint={`alert → approval · ${m.mtta_samples} sample(s)`} />
         <Kpi id="mttr" label="MTTR" value={fmtMin(m.mttr_min)} hint={`alert → verified · ${m.mttr_samples} sample(s)`} />
         <Kpi id="precision" label="Alert precision" value={d.precision == null ? "—" : `${(d.precision * 100).toFixed(0)}%`} hint={`TP ${d.true_positives} · FP ${d.false_positives} · FN ${d.false_negatives}${d.pending_faults ? ` · ${d.pending_faults} pending` : ""}`} />
@@ -92,7 +92,10 @@ export default function AnalyticsPage() {
                 <td className="td font-medium">{e.incident_id}</td><td className="td">{e.asset_id}</td>
                 <td className="td tabular-nums">{fmtTime(e.fault_start)}</td><td className="td tabular-nums">{fmtTime(e.detected_at)}</td>
                 <td className="td tabular-nums">{fmtMin(e.detection_latency_min)}</td>
-                <td className="td tabular-nums">{e.lead_time_min == null ? "limit not reached" : fmtMin(e.lead_time_min)}</td>
+                <td className="td tabular-nums" title={e.details?.lead_time_note}>
+                  {e.lead_time_min == null ? "limit never reached" : fmtMin(e.lead_time_min)}
+                  {e.details?.lead_time_basis === "counterfactual" && <span className="ml-1 text-[10px] text-muted">(vs. unrepaired fault)</span>}
+                </td>
                 <td className="td tabular-nums">{fmtMin(e.mtta_min)}</td><td className="td tabular-nums">{fmtMin(e.mttr_min)}</td>
                 <td className="td tabular-nums">{fmtMoney(e.total_cost)}</td>
                 <td className="td tabular-nums">{e.before_mean ?? "—"} → {e.after_mean ?? "—"}</td>

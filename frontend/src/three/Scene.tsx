@@ -119,7 +119,7 @@ export default function TwinScene({ orbit = false, interactive = true }: { orbit
       shadows={q.shadow > 0}
       dpr={dpr}
       camera={{ position: [58, 40, 66], fov: 42, near: 0.5, far: 1200 }}
-      gl={{ antialias: quality !== "low", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: quality === "high", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={() => useUi.getState().selectAsset(null, false)}
       data-testid="twin-canvas"
     >

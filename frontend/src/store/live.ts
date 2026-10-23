@@ -49,8 +49,6 @@ function toastFor(e: EventEnvelope): Omit<Toast, "id" | "at"> | null {
       return { kind: "bad", title: `Anomaly detected on ${e.asset_id}`, body: `${e.correlation_id} · ${p.severity} · z=${p.z}σ — ${String(p.explanation ?? "").slice(0, 110)}…` };
     case "AnomalyEscalated":
       return { kind: "bad", title: `Anomaly escalated to ${p.severity}`, body: `${e.asset_id} · ${e.correlation_id}` };
-    case "AnomalyWatch":
-      return { kind: "warn", title: `Watch: ${e.asset_id}`, body: "Detector sees a persistent deviation (not yet an anomaly)" };
     case "RiskAssessed":
       return p.action === "MONITOR" ? null : { kind: "warn", title: `Risk ${Math.round(p.risk_score)}/100 → ${p.action}`, body: `${e.asset_id} · priority ${p.priority}` };
     case "WorkOrderDrafted":

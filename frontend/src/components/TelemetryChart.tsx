@@ -42,10 +42,10 @@ export default function TelemetryChart({ asset, metric, height = 210 }: { asset:
   return (
     <div style={{ height }} data-testid={`chart-${metric}`} role="img" aria-label={`${METRIC_LABEL[metric]} over the last three simulated hours`}>
       <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: -12 }}>
+        <ComposedChart data={rows} margin={{ top: 6, right: 8, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={c.grid} />
           <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hhmm} stroke={c.text} tick={{ fontSize: 11 }} minTickGap={36} />
-          <YAxis stroke={c.text} tick={{ fontSize: 11 }} domain={[Math.floor(lo * 0.9 * 10) / 10, Math.ceil(hi * 1.1 * 10) / 10]} unit="" width={44} />
+          <YAxis stroke={c.text} tick={{ fontSize: 11 }} domain={[Math.floor(lo * 0.9 * 10) / 10, Math.ceil(hi * 1.1 * 10) / 10]} tickFormatter={(v: number) => v.toFixed(1)} width={44} />
           <Tooltip
             contentStyle={{ background: theme === "dark" ? "#0d1a20" : "#fff", border: `1px solid ${c.grid}`, borderRadius: 8, fontSize: 12 }}
             labelFormatter={(v) => `${hhmm(v as number)} UTC (sim)`}
