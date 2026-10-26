@@ -42,7 +42,7 @@ interface LiveState {
 const parseMs = (iso: string) => Date.parse(iso.endsWith("Z") ? iso : iso + "Z");
 let toastId = 1;
 
-function toastFor(e: EventEnvelope): Omit<Toast, "id" | "at"> | null {
+export function toastFor(e: EventEnvelope): Omit<Toast, "id" | "at"> | null {
   const p = e.payload;
   switch (e.event_type) {
     case "AnomalyDetected":

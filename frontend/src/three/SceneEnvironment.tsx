@@ -110,9 +110,9 @@ export function SkyAndLight() {
       sun.current.castShadow = q.shadow > 0 && day > 0.05;
     }
     if (hemi.current) {
-      hemi.current.intensity = THREE.MathUtils.lerp(0.22, 0.85, day);
-      hemi.current.color.copy(zenith).lerp(new THREE.Color("#ffffff"), 0.25);
-      hemi.current.groundColor.set("#1b2a32");
+      hemi.current.intensity = THREE.MathUtils.lerp(0.3, 1.1, day);
+      hemi.current.color.copy(zenith).lerp(new THREE.Color("#ffffff"), 0.45);
+      hemi.current.groundColor.set("#6b737a");
     }
     if (stars.current) {
       const m = stars.current.material as THREE.PointsMaterial;
@@ -191,7 +191,7 @@ export function City() {
   }, [q.blocks]);
   const mesh = useRef<THREE.InstancedMesh>(null);
   const tex = useMemo(() => makeWindowTexture(7), []);
-  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#6a7b88", roughness: 0.85, metalness: 0.1, emissive: new THREE.Color("#ffd88a"), emissiveMap: tex, emissiveIntensity: 0 }), [tex]);
+  const mat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#e8ebee", roughness: 0.85, metalness: 0.1, emissive: new THREE.Color("#ffd88a"), emissiveMap: tex, emissiveIntensity: 0 }), [tex]);
 
   useEffect(() => {
     const m = mesh.current;
@@ -203,7 +203,7 @@ export function City() {
       o.scale.set(b.w, b.h, b.d);
       o.updateMatrix();
       m.setMatrixAt(i, o.matrix);
-      c.set("#4f606d").lerp(new THREE.Color("#8fa2b0"), b.tone);
+      c.set("#9ea6ad").lerp(new THREE.Color("#d3d7db"), b.tone);
       m.setColorAt(i, c);
     });
     m.instanceMatrix.needsUpdate = true;
@@ -271,9 +271,9 @@ function makeGroundTexture() {
   const c = document.createElement("canvas");
   c.width = c.height = 256;
   const g = c.getContext("2d")!;
-  g.fillStyle = "#3b4d57";
+  g.fillStyle = "#8d959c";
   g.fillRect(0, 0, 256, 256);
-  g.strokeStyle = "rgba(255,255,255,0.05)";
+  g.strokeStyle = "rgba(255,255,255,0.08)";
   for (let i = 0; i <= 256; i += 32) {
     g.beginPath();
     g.moveTo(i, 0);
@@ -297,7 +297,7 @@ export function Ground() {
   const hz = BUILD_D / 2;
   const trench = { z0: hz, z1: hz + 9 };
   const big = 500;
-  const mat = <meshStandardMaterial map={tex} color="#9fb2bb" roughness={0.95} />;
+  const mat = <meshStandardMaterial map={tex} color="#c9ced2" roughness={0.95} />;
   return (
     <group>
       {/* back, left, right, and front-outside of the light-well */}
@@ -320,17 +320,17 @@ export function Ground() {
       {/* the light-well: concrete floor at basement level and side walls */}
       <mesh rotation-x={-Math.PI / 2} position={[0, -4.02, (trench.z0 + trench.z1) / 2]} receiveShadow>
         <planeGeometry args={[BUILD_W, trench.z1 - trench.z0]} />
-        <meshStandardMaterial color="#5b6770" roughness={0.9} />
+        <meshStandardMaterial color="#9aa1a7" roughness={0.9} />
       </mesh>
       {[-hx, hx].map((x) => (
         <mesh key={x} position={[x, -2, (trench.z0 + trench.z1) / 2]}>
           <boxGeometry args={[0.4, 4, trench.z1 - trench.z0]} />
-          <meshStandardMaterial color="#4c5861" roughness={0.9} />
+          <meshStandardMaterial color="#8b9298" roughness={0.9} />
         </mesh>
       ))}
       <mesh position={[0, -2, trench.z1]}>
         <boxGeometry args={[BUILD_W + 0.8, 4, 0.4]} />
-        <meshStandardMaterial color="#4c5861" roughness={0.9} />
+        <meshStandardMaterial color="#8b9298" roughness={0.9} />
       </mesh>
       {/* entrance bridge across the light-well */}
       <mesh position={[0, -0.15, (trench.z0 + trench.z1) / 2]} receiveShadow castShadow={q.shadow > 0}>

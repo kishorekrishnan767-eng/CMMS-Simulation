@@ -6,7 +6,7 @@ import { Loading } from "./ui";
 
 function Toggle({ label, on, onChange, testid }: { label: string; on: boolean; onChange: (v: boolean) => void; testid?: string }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between rounded-md px-2 py-1 text-xs hover:bg-panel2">
+    <label className="flex cursor-pointer items-center justify-between rounded px-2 py-1 text-[12.5px] hover:bg-panel2">
       <span>{label}</span>
       <input type="checkbox" className="h-3.5 w-3.5 accent-[rgb(var(--accent))]" checked={on} onChange={(e) => onChange(e.target.checked)} data-testid={testid} />
     </label>
@@ -19,6 +19,10 @@ function Dot({ id, fallback }: { id: string; fallback: Health }) {
 }
 
 const FLOOR_LABEL = (level: number) => (level === 6 ? "Roof" : level === -1 ? "B1" : level === 0 ? "G" : `F${level}`);
+const CAMERAS = [
+  ["Overview", { preset: "overview" }], ["Roof plant", { preset: "roof" }], ["Basement B1", { preset: "plant" }],
+  ["Crew room", { preset: "crew" }], ["Floor 3", { preset: "floor", floor: 3 }],
+] as const;
 
 export default function LeftPanel() {
   const { data: tree, isLoading } = useTree();
@@ -29,8 +33,8 @@ export default function LeftPanel() {
       <section>
         <div className="h-section mb-1">Camera</div>
         <div className="grid grid-cols-2 gap-1">
-          {([["Overview", { preset: "overview" }], ["Roof", { preset: "roof" }], ["Plant room", { preset: "plant" }], ["Floor 3", { preset: "floor", floor: 3 }]] as const).map(([label, g]) => (
-            <button key={label} className="btn btn-sm" onClick={() => ui.fly(g as never)} data-testid={`cam-${label.toLowerCase().replace(" ", "-")}`}>
+          {CAMERAS.map(([label, g]) => (
+            <button key={label} className="btn btn-sm justify-start" onClick={() => ui.fly(g as never)} data-testid={`cam-${label.toLowerCase().replace(" ", "-")}`}>
               {label}
             </button>
           ))}
@@ -45,8 +49,12 @@ export default function LeftPanel() {
             <li key={f.level}>
               <div className="flex items-center justify-between">
                 <button
-                  className={`flex-1 rounded px-2 py-1 text-left text-xs font-medium ${ui.isolatedFloor === f.level ? "bg-accent/20 text-accent" : "text-muted hover:text-ink"}`}
-                  onClick={() => ui.set({ isolatedFloor: ui.isolatedFloor === f.level ? null : f.level })}
+                  className={`flex-1 rounded px-2 py-1 text-left text-xs font-semibold ${ui.isolatedFloor === f.level ? "bg-accent/10 text-accent" : "text-ink/80 hover:text-ink"}`}
+                  onClick={() => {
+                    const on = ui.isolatedFloor !== f.level;
+                    ui.set({ isolatedFloor: on ? f.level : null });
+                    if (on) ui.fly({ preset: "floor", floor: f.level });
+                  }}
                   title="Isolate this floor"
                   aria-pressed={ui.isolatedFloor === f.level}
                 >
@@ -58,9 +66,9 @@ export default function LeftPanel() {
               </div>
               {f.assets.map((a) => (
                 <button key={a.id} onClick={() => ui.selectAsset(a.id)} data-testid={`tree-${a.id}`}
-                  className={`ml-3 flex w-[calc(100%-0.75rem)] items-center gap-2 rounded px-2 py-1 text-left text-xs ${selected === a.id ? "bg-panel2 text-accent" : "hover:bg-panel2"}`}>
+                  className={`ml-3 flex w-[calc(100%-0.75rem)] items-center gap-2 rounded px-2 py-1 text-left text-xs ${selected === a.id ? "bg-accent/10 text-accent" : "hover:bg-panel2"}`}>
                   <Dot id={a.id} fallback={a.health_state} />
-                  <span className="truncate">{a.id}</span>
+                  <span className="mono truncate">{a.id}</span>
                 </button>
               ))}
             </li>
@@ -80,17 +88,16 @@ export default function LeftPanel() {
         <Toggle label="Asset labels" on={ui.showLabels} onChange={(v) => ui.set({ showLabels: v })} />
         <Toggle label="Work-order pins" on={ui.showPins} onChange={(v) => ui.set({ showPins: v })} />
         <Toggle label="Technicians" on={ui.showTechnicians} onChange={(v) => ui.set({ showTechnicians: v })} />
-        {ui.isolatedFloor !== null && (
-          <button className="btn btn-sm mt-1 w-full" onClick={() => ui.set({ isolatedFloor: null })}>Show all floors</button>
+        {(ui.isolatedFloor !== null || ui.cutaway !== null) && (
+          <button className="btn btn-sm mt-1 w-full" onClick={() => ui.set({ isolatedFloor: null, cutaway: null })}>Show all floors</button>
         )}
       </section>
 
       <section>
         <div className="h-section mb-1">Graphics quality</div>
-        <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Graphics quality">
+        <div className="seg" role="group" aria-label="Graphics quality">
           {(["low", "medium", "high"] as Quality[]).map((q) => (
-            <button key={q} onClick={() => ui.setQuality(q)} aria-pressed={ui.quality === q} data-testid={`quality-${q}`}
-              className={`flex-1 px-2 py-1 text-xs capitalize ${ui.quality === q ? "bg-accent text-[#04201c]" : "bg-panel2 text-muted hover:text-ink"}`}>
+            <button key={q} onClick={() => ui.setQuality(q)} aria-pressed={ui.quality === q} data-testid={`quality-${q}`} className="capitalize">
               {q}
             </button>
           ))}

@@ -103,7 +103,7 @@ export function FloorBadges() {
         .filter(([, f]) => f.anomalies + f.watches > 0)
         .map(([level, f]) => (
           <group key={level} userData={{ level }} position={[-BUILD_W / 2 - 1.2, floorY(level) + 2.2, BUILD_D / 2 + 1.2]}>
-            <Html center distanceFactor={26} zIndexRange={[22, 0]} style={{ pointerEvents: "none" }}>
+            <Html center zIndexRange={[22, 0]} style={{ pointerEvents: "none" }}>
               <div className={`floor-badge ${f.anomalies ? "bad" : "warn"}`} data-testid={`floor-badge-${level}`}>
                 {level === 6 ? "Roof" : level === -1 ? "B1" : level === 0 ? "G" : `F${level}`} · {f.anomalies ? `${f.anomalies} anomaly` : `${f.watches} watch`}
               </div>

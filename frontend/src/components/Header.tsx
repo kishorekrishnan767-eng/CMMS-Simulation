@@ -32,16 +32,16 @@ function SimControls() {
   const setSpeed = (speed: number) => run(() => api.patch<SimState>("/api/simulation", { speed }));
   return (
     <div className="flex items-center gap-1.5" data-testid="sim-controls">
-      <button className="btn btn-sm" onClick={toggle} disabled={busy || !can} title={can ? "" : "Sign in as Operator, Supervisor or Admin to control the simulation"} aria-label={clock.running ? "Pause simulation" : "Start simulation"} data-testid="sim-toggle">
-        {clock.running ? "❚❚ Pause" : "▶ Run"}
+      <button className={`btn btn-sm min-w-[64px] ${clock.running ? "" : "btn-primary"}`} onClick={toggle} disabled={busy || !can} title={can ? "" : "Sign in as Operator, Supervisor or Admin to control the simulation"} aria-label={clock.running ? "Pause simulation" : "Start simulation"} data-testid="sim-toggle">
+        {clock.running ? "Pause" : "Run"}
       </button>
-      <div className="hidden items-center overflow-hidden rounded-lg border border-line md:flex" role="group" aria-label="Simulation speed">
+      <div className="seg hidden md:flex" role="group" aria-label="Simulation speed" title="Simulation speed: 60× means one real second is one simulated minute">
         {SIM_SPEEDS.map((s) => (
           <button
             key={s}
             onClick={() => setSpeed(s)}
             disabled={busy || !can}
-            className={`px-2 py-1 text-xs font-medium tabular-nums transition-colors ${clock.speed === s ? "bg-accent text-[#04201c]" : "bg-panel2 text-muted hover:text-ink"}`}
+            className="tabular-nums"
             data-testid={`speed-${s}`}
             aria-pressed={clock.speed === s}
           >
@@ -74,15 +74,15 @@ function RoleSwitcher() {
   return (
     <div className="relative" ref={ref}>
       <button className="btn btn-sm" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} data-testid="role-switcher">
-        <span className="h-2 w-2 rounded-full bg-accent" />
+        <span className="h-2 w-2 rounded-full bg-ok" />
         {me ? `${me.display_name.split(" ")[0]} · ${me.role}` : "Sign in"}
       </button>
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-line bg-panel p-2 shadow-2xl" role="menu">
+        <div className="absolute right-0 z-50 mt-2 w-72 rounded-md border border-line bg-panel p-2 shadow-lg" role="menu">
           <div className="px-2 pb-1 pt-1 text-[11px] uppercase tracking-wider text-muted">Demo users — permissions are enforced by the backend</div>
           {(users ?? []).map((u) => (
             <button key={u.username} role="menuitem" onClick={() => login(u.username, u.password)} data-testid={`login-${u.username}`}
-              className={`flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-panel2 ${me?.username === u.username ? "bg-panel2" : ""}`}>
+              className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-panel2 ${me?.username === u.username ? "bg-panel2" : ""}`}>
               <span>
                 {u.display_name}
                 <span className="block text-[11px] text-muted">{u.username}{u.technician_id ? ` · ${u.technician_id}` : ""}</span>
@@ -115,17 +115,17 @@ export default function Header() {
   const quality = useUi((s) => s.quality);
   const [menu, setMenu] = useState(false);
   return (
-    <header className="glass fixed inset-x-0 top-0 z-40 border-b border-line" role="banner">
+    <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-panel" role="banner">
       <div className="flex h-14 items-center gap-3 px-3 sm:px-5">
         <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight" aria-label={`${APP_NAME} home`}>
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-accent text-[#04201c]">
+          <span className="grid h-7 w-7 place-items-center rounded-md bg-ink text-panel">
             <svg viewBox="0 0 32 32" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"><path d="M9 25V11l7-4 7 4v14" /><path d="M13 25v-7h6v7" /></svg>
           </span>
           <span className="hidden sm:inline">{APP_NAME}</span>
         </Link>
         <nav className="hidden items-center gap-0.5 xl:flex" aria-label="Main">
           {NAV.map(([to, label]) => (
-            <NavLink key={to} to={to} className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors ${isActive ? "bg-panel2 text-accent" : "text-muted hover:text-ink"}`}>
+            <NavLink key={to} to={to} className={({ isActive }) => `whitespace-nowrap rounded-md px-2 py-1.5 text-[13px] font-medium transition-colors ${isActive ? "bg-panel2 text-ink" : "text-muted hover:text-ink"}`}>
               {label}
             </NavLink>
           ))}

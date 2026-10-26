@@ -26,12 +26,16 @@ async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     bootstrap.seed()
     wiring.ensure_warm_start()
     engine.runner.start()
+    from app.modules.autopilot.operations import autopilot
+    autopilot.configure(enabled=get_settings().autopilot)
+    autopilot.start()
     if get_settings().sim_autostart:
         from app.db import write_session
         from app.models import SimulationState
         with write_session() as s:
             s.get(SimulationState, 1).running = True  # type: ignore[union-attr]
     yield
+    autopilot.stop()
     engine.runner.stop()
 
 
@@ -53,8 +57,9 @@ def create_app() -> FastAPI:
             "code": "validation_error", "message": "Request validation failed",
             "details": {"errors": [{"loc": list(e["loc"]), "msg": e["msg"]} for e in exc.errors()]}}})
 
-    from app.api import routes, routes_cmms, routes_demo
+    from app.api import routes, routes_autopilot, routes_cmms, routes_demo
     app.include_router(routes.router)
+    app.include_router(routes_autopilot.router)
     app.include_router(routes_cmms.router)
     app.include_router(routes_demo.router)
     app.include_router(routes.ws_router)

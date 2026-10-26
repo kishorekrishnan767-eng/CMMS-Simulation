@@ -110,7 +110,7 @@ function SupplyFanBody() {
         </mesh>
         <mesh position={[2.92, 1.5, 1.0]}>
           <boxGeometry args={[0.02, 0.18, 0.5]} />
-          <meshBasicMaterial color="#1fd1b6" />
+          <meshBasicMaterial color="#7fb2e8" />
         </mesh>
         {/* fan stack on top */}
         <mesh position={[-0.6, 2.7, 0]} material={mat.steel} castShadow>

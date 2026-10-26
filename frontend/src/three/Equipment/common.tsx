@@ -63,7 +63,8 @@ export function AssetFrame({ asset, radius = 3, children, sensors }: { asset: As
   const ring = useRef<THREE.Mesh>(null);
   const [hovered, setHovered] = useState(false);
   const selected = useUi((s) => s.selectedAssetId === asset.id);
-  const showLabels = useUi((s) => s.showLabels);
+  // while part of the building is cut away, only label machines on the level being looked at
+  const showLabels = useUi((s) => s.showLabels && (s.cutaway === null || s.cutaway === asset.floor_level));
   const layout = ASSET_LAYOUT[asset.asset_type] ?? ASSET_LAYOUT.PUMP;
   const haloTex = useMemo(() => haloTexture(), []);
 
@@ -97,18 +98,18 @@ export function AssetFrame({ asset, radius = 3, children, sensors }: { asset: As
     if (halo.current) {
       const m = halo.current.material as THREE.SpriteMaterial;
       m.color.copy(v.color);
-      m.opacity = (health === "NORMAL" || health === "CLEARED" ? 0.28 : 0.55) + v.pulse * 0.8 + (v.selected ? 0.15 : 0);
+      m.opacity = health === "NORMAL" || health === "CLEARED" ? 0 : 0.32 + v.pulse * 0.6;
       const s = radius * 2.4 * (1 + v.pulse * 0.35);
       halo.current.scale.set(s, s, 1);
     }
     if (disc.current) {
       const m = disc.current.material as THREE.MeshBasicMaterial;
       m.color.copy(v.color);
-      m.opacity = 0.16 + v.pulse * 0.5;
+      m.opacity = (health === "NORMAL" || health === "CLEARED" ? 0.07 : 0.18) + v.pulse * 0.35;
     }
     if (ring.current) {
       ring.current.visible = v.selected || hovered;
-      (ring.current.material as THREE.MeshBasicMaterial).color.set(v.selected ? PALETTE.teal : "#ffffff");
+      (ring.current.material as THREE.MeshBasicMaterial).color.set(v.selected ? PALETTE.accent : "#ffffff");
       ring.current.rotation.z += delta * 0.6;
     }
   });
@@ -146,7 +147,7 @@ export function AssetFrame({ asset, radius = 3, children, sensors }: { asset: As
         </sprite>
         {sensors && <SensorMarkers asset={asset} positions={sensors} active={selected || hovered} />}
         {showLabels && (
-          <Html position={[0, layout.pinY + 0.9, 0]} center distanceFactor={26} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+          <Html position={[0, layout.pinY + 0.9, 0]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
             <div className={`asset-chip ${selected ? "is-selected" : ""}`} data-testid={`chip-${asset.id}`}>
               <HealthDot id={asset.id} fallback={asset.health_state} />
               <span>{asset.id}</span>
@@ -173,8 +174,7 @@ function SensorMarkers({ asset, positions, active }: { asset: Asset; positions: 
   useFrame((state) => {
     refs.current.forEach((m, i) => {
       if (!m) return;
-      const s = 1 + 0.18 * Math.sin(state.clock.elapsedTime * 3 + i);
-      m.scale.setScalar(s);
+      m.scale.setScalar(0.8 + 0.08 * Math.sin(state.clock.elapsedTime * 2 + i));
     });
   });
   if (!showSensors) return null;
@@ -187,10 +187,10 @@ function SensorMarkers({ asset, positions, active }: { asset: Asset; positions: 
           <group key={s.id} position={p}>
             <mesh ref={(m) => (refs.current[i] = m)}>
               <octahedronGeometry args={[0.14, 0]} />
-              <meshBasicMaterial color={stale ? PALETTE.watch : PALETTE.teal} />
+              <meshBasicMaterial color={stale ? PALETTE.watch : "#e8eef4"} />
             </mesh>
             {active && (
-              <Html center distanceFactor={14} position={[0, 0.34, 0]} zIndexRange={[19, 0]} style={{ pointerEvents: "none" }}>
+              <Html center position={[0, 0.34, 0]} zIndexRange={[19, 0]} style={{ pointerEvents: "none" }}>
                 <SensorTag id={s.id} metric={s.metric} unit={s.unit} assetId={asset.id} />
               </Html>
             )}
@@ -217,7 +217,7 @@ export const mat = {
   plinth: new THREE.MeshStandardMaterial({ color: "#2f3b44", roughness: 0.8 }),
   rubber: new THREE.MeshStandardMaterial({ color: "#161c20", roughness: 0.9 }),
   blade: new THREE.MeshStandardMaterial({ color: "#aebbc4", metalness: 0.5, roughness: 0.35 }),
-  motor: new THREE.MeshStandardMaterial({ color: "#2c6f8f", metalness: 0.5, roughness: 0.45 }),
+  motor: new THREE.MeshStandardMaterial({ color: "#3d5a73", metalness: 0.5, roughness: 0.45 }),
   cold: new THREE.MeshStandardMaterial({ color: PALETTE.pipeCold, metalness: 0.4, roughness: 0.4 }),
   hot: new THREE.MeshStandardMaterial({ color: PALETTE.pipeHot, metalness: 0.4, roughness: 0.4 }),
 };

@@ -10,6 +10,7 @@ import { CameraRig } from "./CameraRig";
 import { DuctRiser, FcuBranch, PipeNetwork, RoofCollector } from "./Equipment/Distribution";
 import { ExhaustFan, SupplyFan } from "./Equipment/FanModels";
 import { Chiller, FanCoilUnit, Pump } from "./Equipment/PlantModels";
+import { LiftShaft } from "./LiftShaft";
 import { FloorBadges, HeatOverlay } from "./Overlays";
 import { City, Ground, QUALITY, SkyAndLight } from "./SceneEnvironment";
 import { Technicians } from "./Technicians";
@@ -30,7 +31,8 @@ function AssetModel({ asset }: { asset: Asset }) {
 function StaticPlant() {
   const g = useRef<THREE.Group>(null);
   useFrame(() => {
-    if (g.current) g.current.visible = useUi.getState().explode < 0.02;
+    const ui = useUi.getState();
+    if (g.current) g.current.visible = ui.explode < 0.02 && ui.cutaway === null;
   });
   return (
     <group ref={g}>
@@ -44,7 +46,9 @@ function StaticPlant() {
 
 const ORDER: Quality[] = ["low", "medium", "high"];
 
-/** Measures FPS and (optionally) steps the quality down when the machine cannot keep up. */
+/** Measures FPS and (optionally) steps the quality down when the machine cannot keep up.
+ *  Ignores the first 12 s (shader compilation, first data load) and only reacts to 5 consecutive
+ *  seconds under 30 fps, so a momentary hitch never triggers a canvas rebuild. */
 function FpsMonitor() {
   const frames = useRef(0);
   const last = useRef(performance.now());
@@ -61,9 +65,9 @@ function FpsMonitor() {
       const ui = useUi.getState();
       ui.set({ fps });
       warm.current++;
-      if (ui.autoQuality && warm.current > 5) {
-        slow.current = fps < 38 ? slow.current + 1 : 0;
-        if (slow.current >= 3 && ui.quality !== "low") {
+      if (ui.autoQuality && warm.current > 12) {
+        slow.current = fps < 30 ? slow.current + 1 : 0;
+        if (slow.current >= 5 && ui.quality !== "low") {
           ui.setQuality(ORDER[Math.max(0, ORDER.indexOf(ui.quality) - 1)]);
           slow.current = 0;
           warm.current = 0;
@@ -90,6 +94,7 @@ function Content({ orbit, interactive }: { orbit: boolean; interactive: boolean 
       <City />
       <Building renderLevel={(level) => (byLevel.get(level) ?? []).map((a) => <AssetModel key={a.id} asset={a} />)} />
       <StaticPlant />
+      <LiftShaft />
       <HeatOverlay />
       <FloorBadges />
       <WorkOrderPins />
@@ -119,7 +124,7 @@ export default function TwinScene({ orbit = false, interactive = true }: { orbit
       shadows={q.shadow > 0}
       dpr={dpr}
       camera={{ position: [58, 40, 66], fov: 42, near: 0.5, far: 1200 }}
-      gl={{ antialias: quality === "high", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      gl={{ antialias: quality !== "low", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={() => useUi.getState().selectAsset(null, false)}
       data-testid="twin-canvas"
     >

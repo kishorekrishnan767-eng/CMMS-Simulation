@@ -73,7 +73,7 @@ export default function DemoDirector({ onExit }: { onExit: () => void }) {
   const cur = data.current;
   const lastLog = data.log.slice(-4);
   return (
-    <div className="glass pointer-events-auto w-[min(94vw,560px)] rounded-xl border border-accent/50 p-4 shadow-2xl" data-testid="demo-director" role="region" aria-label="Guided demo">
+    <div className="glass pointer-events-auto w-[min(94vw,560px)] rounded-md border border-accent/50 p-4 shadow-lg" data-testid="demo-director" role="region" aria-label="Guided demo">
       <div className="mb-1 flex items-center justify-between">
         <span className="badge badge-ok">Guided demo · {data.step}/{data.total}</span>
         <button className="btn btn-sm" onClick={() => { void stop(); onExit(); }} data-testid="demo-exit">Exit</button>

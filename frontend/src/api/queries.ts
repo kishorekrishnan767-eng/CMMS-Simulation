@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
-  Anomaly, Asset, AuditRow, BuildingTree, Candidate, Decision, DemoUser, EventEnvelope, InventoryItem, SimState, Technician,
+  Anomaly, Asset, AuditRow, AutopilotState, ProcedureCatalogue, BuildingTree, Candidate, Decision, DemoUser, EventEnvelope, InventoryItem, SimState, Technician,
   TelemetrySeries, TimelineItem, VerificationPreview, WorkOrderDetail, WorkOrderSummary,
 } from "./types";
 import { BUILDING_ID } from "../config";
@@ -71,3 +71,6 @@ export const useAnalytics = () =>
     },
     refetchInterval: 8000,
   });
+
+export const useAutopilot = () => useQuery({ queryKey: ["autopilot"], queryFn: () => api.get<AutopilotState>("/api/autopilot"), refetchInterval: 1500 });
+export const useProcedures = () => useQuery({ queryKey: ["procedures"], queryFn: () => api.get<ProcedureCatalogue>("/api/procedures"), staleTime: Infinity });

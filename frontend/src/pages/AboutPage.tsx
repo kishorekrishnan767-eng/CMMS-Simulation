@@ -78,7 +78,7 @@ export default function AboutPage() {
         <h2 className="mb-3 text-lg font-semibold">The seven layers</h2>
         <ol className="grid gap-2 md:grid-cols-2">
           {LAYERS.map((l) => (
-            <li key={l.n} className="flex gap-3 rounded-lg border border-line p-3 text-sm"><span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-accent font-bold text-[#04201c]">{l.n}</span><span><b>{l.name}</b><br /><span className="text-muted">{l.blurb}</span></span></li>
+            <li key={l.n} className="flex gap-3 rounded-md border border-line p-3 text-sm"><span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-accent font-bold text-white">{l.n}</span><span><b>{l.name}</b><br /><span className="text-muted">{l.blurb}</span></span></li>
           ))}
         </ol>
       </section>

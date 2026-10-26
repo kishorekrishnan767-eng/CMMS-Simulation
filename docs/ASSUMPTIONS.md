@@ -64,3 +64,16 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
     `AnomalyWatch` (entering WATCH) and `AnomalyCorroborated` (a corroborating metric newly agrees).
 23. **Verification settle period.** After a repair the simulated degradation decays with τ = 5 min, so the
     30-sample verification window starts after a 30-minute settle (6τ).
+24. **Crew room.** All technicians are based in a maintenance crew room on the ground floor (level 0) and
+    every job starts and ends there (seat → tool cabinet → door → east service line → glass lift in the
+    front light-well → corridor → asset). Dispatch proximity and travel time (`3 + 2·|Δfloor|` min) are
+    therefore measured from the ground floor. Off-shift technicians are not drawn in the building.
+25. **Operations autopilot** (`app/modules/autopilot`). On by default (`AUTOPILOT=false` disables it; the
+    UI toggle changes it at runtime, audited as `sim.autopilot`). It is an API client like the guided-demo
+    director: it injects seeded random bearing wear (Poisson process in sim time, rate Off/Low/Normal/High)
+    and plays the supervisor, technicians and verifier through the real endpoints with seeded delays. It
+    pauses while the clock is paused or the guided demo runs. Test harnesses (pytest, Playwright, the DoD
+    runner) run with it off so scripted scenarios stay deterministic.
+26. **Job procedures** (`cmms/procedures.py`) are demo step lists with demo durations per asset type. The
+    UI shows the current step from elapsed sim time since work began; the autopilot signs the job off when
+    the planned minutes have elapsed and records the step keys as the inspection checklist.

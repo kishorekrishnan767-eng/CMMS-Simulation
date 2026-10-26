@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type Quality = "low" | "medium" | "high";
-export type CameraPreset = "overview" | "roof" | "plant" | "floor" | "asset" | "follow";
+export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "floor" | "asset" | "follow";
 export type ThemeMode = "dark" | "light";
 
 export interface CameraGoal {
@@ -35,6 +35,7 @@ interface UiState {
   reducedMotion: boolean;
   selectedAssetId: string | null;
   isolatedFloor: number | null; // show only this floor (others ghosted)
+  cutaway: number | null; // floors above this level are ghosted (set by the camera for basement views)
   explode: number; // 0..1
   xray: boolean;
   heat: boolean;
@@ -45,6 +46,8 @@ interface UiState {
   cameraGoal: CameraGoal;
   fps: number;
   rightPanelOpen: boolean;
+  /** "auto" resolves to the job tab when the selected asset has open work, else its telemetry. */
+  rightTab: "ops" | "job" | "asset" | "auto";
   layerPanel: number | null;
   setQuality: (q: Quality) => void;
   set: (patch: Partial<UiState>) => void;
@@ -57,10 +60,11 @@ let nonce = 1;
 export const useUi = create<UiState>((set, get) => ({
   quality: read<Quality>("twincmms.quality", "medium"),
   autoQuality: read<boolean>("twincmms.autoQuality", true),
-  theme: read<ThemeMode>("twincmms.theme", "dark"),
+  theme: read<ThemeMode>("twincmms.theme", "light"),
   reducedMotion: read<boolean>("twincmms.reducedMotion", false),
   selectedAssetId: null,
   isolatedFloor: null,
+  cutaway: null,
   explode: 0,
   xray: false,
   heat: false,
@@ -71,6 +75,7 @@ export const useUi = create<UiState>((set, get) => ({
   cameraGoal: { preset: "overview", nonce: 0 },
   fps: 0,
   rightPanelOpen: true,
+  rightTab: "ops",
   layerPanel: null,
   setQuality: (q) => {
     write("twincmms.quality", q);
@@ -83,7 +88,7 @@ export const useUi = create<UiState>((set, get) => ({
     set(patch);
   },
   selectAsset: (id, fly = true) => {
-    set({ selectedAssetId: id, rightPanelOpen: true });
+    set({ selectedAssetId: id, rightPanelOpen: true, rightTab: id ? "auto" : "ops" });
     if (id && fly) get().fly({ preset: "asset", assetId: id });
   },
   fly: (goal) => set({ cameraGoal: { ...goal, nonce: nonce++ } }),

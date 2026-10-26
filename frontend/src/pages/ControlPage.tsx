@@ -41,10 +41,10 @@ export default function ControlPage() {
             <button className="btn btn-primary" disabled={busy} onClick={() => run(() => api.post(clock.running ? "/api/simulation/pause" : "/api/simulation/start"))} data-testid="ctl-toggle">
               {clock.running ? "❚❚ Pause" : "▶ Run"}
             </button>
-            <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="Speed">
+            <div className="flex overflow-hidden rounded-md border border-line" role="group" aria-label="Speed">
               {SIM_SPEEDS.map((s) => (
                 <button key={s} onClick={() => run(() => api.patch("/api/simulation", { speed: s }))} aria-pressed={clock.speed === s}
-                  className={`px-3 py-1.5 text-sm tabular-nums ${clock.speed === s ? "bg-accent text-[#04201c]" : "bg-panel2 text-muted"}`} data-testid={`ctl-speed-${s}`}>{s}×</button>
+                  className={`px-3 py-1.5 text-sm tabular-nums ${clock.speed === s ? "bg-accent text-white" : "bg-panel2 text-muted"}`} data-testid={`ctl-speed-${s}`}>{s}×</button>
               ))}
             </div>
           </div>
@@ -101,7 +101,7 @@ export default function ControlPage() {
             <button className="btn" disabled={busy} onClick={() => run(() => api.post("/api/simulation/faults", { asset_id: sensorAsset, fault_type: sensorFault }), `${sensorFault} scheduled on ${sensorAsset}`)} data-testid="ctl-fault">Inject</button>
           </div>
           <p className="mt-2 text-xs text-muted">Faults are applied to the telemetry transport at the next simulated minute. Layer 3 must store every rejected reading with a reason:</p>
-          <div className="scroll-thin mt-2 max-h-56 overflow-auto rounded-lg border border-line">
+          <div className="scroll-thin mt-2 max-h-56 overflow-auto rounded-md border border-line">
             <table className="w-full text-xs" data-testid="rejected-table">
               <thead><tr><th className="th">When</th><th className="th">Sensor</th><th className="th">Reason</th><th className="th">Detail</th></tr></thead>
               <tbody>

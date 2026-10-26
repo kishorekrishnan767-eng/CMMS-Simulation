@@ -30,9 +30,9 @@ function BeforeAfter({ wo }: { wo: WorkOrderDetail }) {
           <XAxis dataKey="t" type="number" domain={["dataMin", "dataMax"]} scale="time" tickFormatter={(v) => new Date(v).toISOString().slice(11, 16)} tick={{ fontSize: 10 }} minTickGap={30} />
           <YAxis tick={{ fontSize: 10 }} width={40} />
           <Tooltip labelFormatter={(v) => new Date(v as number).toISOString().slice(11, 16) + " UTC"} />
-          <Area dataKey="v" stroke="#1fd1b6" fill="#1fd1b6" fillOpacity={0.18} isAnimationActive={false} name="vibration mm/s" />
-          {detected && <ReferenceLine x={detected} stroke="#ff4d4f" label={{ value: "work order", fontSize: 10, fill: "#ff4d4f" }} />}
-          {completed && <ReferenceLine x={completed} stroke="#4da3ff" label={{ value: "repair", fontSize: 10, fill: "#4da3ff" }} />}
+          <Area dataKey="v" stroke="#1f5fbf" fill="#1f5fbf" fillOpacity={0.18} isAnimationActive={false} name="vibration mm/s" />
+          {detected && <ReferenceLine x={detected} stroke="#c4302b" label={{ value: "work order", fontSize: 10, fill: "#c4302b" }} />}
+          {completed && <ReferenceLine x={completed} stroke="#2f9e5a" label={{ value: "repair", fontSize: 10, fill: "#2f9e5a" }} />}
         </AreaChart>
       </ResponsiveContainer>
     </div>
@@ -92,7 +92,7 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           {wo.safety_note && <p className="rounded border border-watch/40 bg-watch/10 p-2 text-xs text-watch">{wo.safety_note}</p>}
           <p className="whitespace-pre-line text-sm text-muted">{wo.description}</p>
 
-          <section className="rounded-lg border border-line p-3">
+          <section className="rounded-md border border-line p-3">
             <div className="h-section mb-2">Actions {me ? <span className="normal-case text-muted">— you are {me.role}</span> : null}</div>
             <div className="mb-2 flex items-center gap-2">
               <input className="input" placeholder="Reason / note (required to reject, cancel, hold, or fail)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason or note" />
@@ -146,12 +146,12 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           </section>
 
           {canAssign && (
-            <section className="rounded-lg border border-line p-3" data-testid="dispatch-candidates">
+            <section className="rounded-md border border-line p-3" data-testid="dispatch-candidates">
               <div className="h-section mb-2">Dispatch ranking <span className="normal-case text-muted">— required skills: {wo.required_skills.join(", ")}</span></div>
               <p className="mb-2 text-[11px] text-muted">score = 0.35·skill fit + 0.25·proximity + 0.20·(1 − workload) + 0.20·first-time-fix rate. The supervisor confirms; the system never assigns silently.</p>
               <div className="space-y-2">
                 {(cands?.candidates ?? []).map((c) => (
-                  <div key={c.technician_id} className={`rounded-lg border p-2 ${c.eligible ? "border-line" : "border-line opacity-80"}`} data-testid={`cand-${c.technician_id}`}>
+                  <div key={c.technician_id} className={`rounded-md border p-2 ${c.eligible ? "border-line" : "border-line opacity-80"}`} data-testid={`cand-${c.technician_id}`}>
                     <div className="flex items-center justify-between">
                       <div className="text-sm font-medium">{c.rank ? `#${c.rank} ` : ""}{c.name} <span className="text-xs text-muted">· floor {c.current_floor} · ETA {c.travel_minutes} min</span></div>
                       <div className="flex items-center gap-2">
@@ -172,7 +172,7 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           )}
 
           {wo.risk_assessment && (
-            <section className="rounded-lg border border-line p-3">
+            <section className="rounded-md border border-line p-3">
               <div className="h-section mb-2">Risk decision & evidence</div>
               <RiskBreakdown decision={wo.risk_assessment} />
               <ul className="mt-3 space-y-1 text-xs" data-testid="wo-evidence">
@@ -208,7 +208,7 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           )}
 
           {verifying && (
-            <section className="rounded-lg border border-line p-3" data-testid="verification-card">
+            <section className="rounded-md border border-line p-3" data-testid="verification-card">
               <div className="h-section mb-2">Verification (Layer 7)</div>
               {ver && (
                 <>

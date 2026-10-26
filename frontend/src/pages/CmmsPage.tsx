@@ -50,9 +50,9 @@ export default function CmmsPage() {
       title="Work orders"
       subtitle="One active work order per asset and failure mode. Every transition is performed by a single backend state machine; the actions you see depend on your role, and the backend rejects anything else."
       actions={
-        <div className="flex overflow-hidden rounded-lg border border-line" role="group" aria-label="View">
+        <div className="flex overflow-hidden rounded-md border border-line" role="group" aria-label="View">
           {(["board", "table"] as const).map((v) => (
-            <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`px-3 py-1.5 text-xs capitalize ${view === v ? "bg-accent text-[#04201c]" : "bg-panel2 text-muted"}`} data-testid={`view-${v}`}>{v}</button>
+            <button key={v} onClick={() => setView(v)} aria-pressed={view === v} className={`px-3 py-1.5 text-xs capitalize ${view === v ? "bg-accent text-white" : "bg-panel2 text-muted"}`} data-testid={`view-${v}`}>{v}</button>
           ))}
         </div>
       }

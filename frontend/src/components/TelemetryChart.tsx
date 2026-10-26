@@ -21,8 +21,8 @@ export default function TelemetryChart({ asset, metric, height = 210 }: { asset:
   const { data: anomalies } = useAnomalies(undefined, asset.id);
   const theme = useUi((s) => s.theme);
   const c = theme === "dark"
-    ? { line: "#1fd1b6", band: "#1fd1b6", grid: "#233c46", bad: "#ff4d4f", watch: "#ffb020", text: "#8ca5af" }
-    : { line: "#068a7a", band: "#068a7a", grid: "#d0dfe5", bad: "#cd242c", watch: "#b06c00", text: "#50686f" };
+    ? { line: "#629af0", band: "#629af0", grid: "#323840", bad: "#ec5e58", watch: "#e2a038", text: "#969ea8" }
+    : { line: "#1f5fbf", band: "#1f5fbf", grid: "#e1e4e8", bad: "#c4302b", watch: "#b06a00", text: "#606974" };
 
   const rows = useMemo(
     () => (data?.points ?? []).map((p) => ({ t: ms(p.t), v: p.v, band: p.lo !== undefined && p.hi !== undefined ? [p.lo, p.hi] : undefined, bad: p.q !== "GOOD" ? p.v : undefined })),
@@ -47,7 +47,7 @@ export default function TelemetryChart({ asset, metric, height = 210 }: { asset:
           <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} tickFormatter={hhmm} stroke={c.text} tick={{ fontSize: 11 }} minTickGap={36} />
           <YAxis stroke={c.text} tick={{ fontSize: 11 }} domain={[Math.floor(lo * 0.9 * 10) / 10, Math.ceil(hi * 1.1 * 10) / 10]} tickFormatter={(v: number) => v.toFixed(1)} width={44} />
           <Tooltip
-            contentStyle={{ background: theme === "dark" ? "#0d1a20" : "#fff", border: `1px solid ${c.grid}`, borderRadius: 8, fontSize: 12 }}
+            contentStyle={{ background: theme === "dark" ? "#191c20" : "#fff", border: `1px solid ${c.grid}`, borderRadius: 6, fontSize: 12 }}
             labelFormatter={(v) => `${hhmm(v as number)} UTC (sim)`}
             formatter={(v: unknown, name: string) => [Array.isArray(v) ? `${(v[0] as number).toFixed(2)} – ${(v[1] as number).toFixed(2)}` : (v as number).toFixed(2), name === "band" ? "baseline band (±3.5σ)" : data?.unit ?? ""]}
           />

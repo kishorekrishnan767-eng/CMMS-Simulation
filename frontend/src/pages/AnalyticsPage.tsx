@@ -1,6 +1,7 @@
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useAnalytics } from "../api/queries";
 import { Empty, ErrorState, Loading, PageShell, fmtMin, fmtMoney, fmtTime } from "../components/ui";
+import { WO_COLOR } from "../config";
 
 function Kpi({ label, value, hint, id }: { label: string; value: string; hint?: string; id: string }) {
   return (
@@ -12,10 +13,7 @@ function Kpi({ label, value, hint, id }: { label: string; value: string; hint?: 
   );
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  DRAFT: "#8aa4b8", OPEN: "#ffb020", ASSIGNED: "#8b7bff", ON_HOLD: "#ff8a3d", IN_PROGRESS: "#4da3ff", COMPLETED: "#1fd1b6",
-  VERIFIED: "#2fe0a0", REWORK_REQUIRED: "#ff4d8d", CLOSED: "#5b7a88", REJECTED: "#6b7280", CANCELLED: "#6b7280",
-};
+const STATUS_COLOR: Record<string, string> = WO_COLOR;
 
 export default function AnalyticsPage() {
   const { data, isLoading, error, refetch } = useAnalytics();
@@ -55,7 +53,7 @@ export default function AnalyticsPage() {
                   <XAxis dataKey="status" tick={{ fontSize: 10 }} interval={0} angle={-20} height={50} textAnchor="end" />
                   <YAxis allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>{m.throughput.map((t: any) => <Cell key={t.status} fill={STATUS_COLOR[t.status] ?? "#1fd1b6"} />)}</Bar>
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>{m.throughput.map((t: any) => <Cell key={t.status} fill={STATUS_COLOR[t.status] ?? "#6b7785"} />)}</Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -71,8 +69,8 @@ export default function AnalyticsPage() {
                 <YAxis allowDecimals={false} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="alerts" name="alerts (anomalies)" fill="#ff4d4f" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="work_orders" name="work orders" fill="#4da3ff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="alerts" name="alerts (anomalies)" fill="#c4302b" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="work_orders" name="work orders" fill="#1f5fbf" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -110,7 +108,7 @@ export default function AnalyticsPage() {
         <div className="h-section mb-2">Technician first-time-fix rate (updated from closed work orders)</div>
         <div className="grid gap-2 sm:grid-cols-3">
           {m.technicians.map((t: any) => (
-            <div key={t.id} className="rounded-lg border border-line p-3"><div className="font-medium">{t.name}</div><div className="text-xs text-muted">{(t.performance * 100).toFixed(1)}% · {t.jobs_completed} job(s) closed</div></div>
+            <div key={t.id} className="rounded-md border border-line p-3"><div className="font-medium">{t.name}</div><div className="text-xs text-muted">{(t.performance * 100).toFixed(1)}% · {t.jobs_completed} job(s) closed</div></div>
           ))}
         </div>
       </section>

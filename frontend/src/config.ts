@@ -14,3 +14,18 @@ export const LAYERS: { n: number; name: string; short: string; blurb: string }[]
 ];
 
 export const SIM_SPEEDS = [1, 10, 60, 300, 1800];
+
+/** Work-order status colours (3D pins, charts, badges): calm hues, red reserved for rework. */
+export const WO_COLOR: Record<string, string> = {
+  DRAFT: "#8a94a0",
+  OPEN: "#d08a1a",
+  ASSIGNED: "#3b82c4",
+  ON_HOLD: "#c9661a",
+  IN_PROGRESS: "#1f5fbf",
+  COMPLETED: "#14868a",
+  VERIFIED: "#2f9e5a",
+  REWORK_REQUIRED: "#c4302b",
+  CLOSED: "#6b7785",
+  REJECTED: "#9aa3ad",
+  CANCELLED: "#9aa3ad",
+};

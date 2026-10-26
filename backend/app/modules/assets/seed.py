@@ -72,13 +72,15 @@ ROLE_DESCRIPTIONS = {
     "VERIFIER": "Independently verifies completed repairs",
 }
 
+# Every technician is based in the maintenance crew room on the ground floor (level 0) and walks out
+# from there; colours are hi-vis vest colours so the avatars are easy to tell apart.
 TECHNICIANS = [
     dict(id="TECH-01", name="Arjun Mehta", skills=["HVAC_MECHANICAL", "BEARING_SERVICE", "PUMPS"], cert=2,
-         home=0, perf=0.88, rate=48.0, color="#f5a524", weekdays=range(7), start=7.0, end=19.0),
+         home=0, perf=0.88, rate=48.0, color="#f08c00", weekdays=range(7), start=7.0, end=19.0),
     dict(id="TECH-02", name="Priya Nair", skills=["HVAC_MECHANICAL", "BEARING_SERVICE", "CHILLER"], cert=3,
-         home=3, perf=0.93, rate=62.0, color="#5ec2ff", weekdays=range(7), start=7.0, end=19.0),
+         home=0, perf=0.93, rate=62.0, color="#1c7ed6", weekdays=range(7), start=7.0, end=19.0),
     dict(id="TECH-03", name="Sam Okafor", skills=["HVAC_MECHANICAL", "PUMPS", "ELECTRICAL"], cert=1,
-         home=-1, perf=0.68, rate=38.0, color="#c084fc", weekdays=range(5), start=6.0, end=18.0),
+         home=0, perf=0.68, rate=38.0, color="#2f9e44", weekdays=range(5), start=6.0, end=18.0),
 ]
 
 USERS = [
@@ -143,6 +145,15 @@ def seed_reference_data(session: Session) -> None:
         for t in TECHNICIANS:
             for wd in t["weekdays"]:
                 session.add(TechnicianShift(technician_id=t["id"], weekday=wd, start_hour=t["start"], end_hour=t["end"]))
+
+    else:
+        # reference data may change between versions (crew room location, vest colours): keep it in sync
+        for t in TECHNICIANS:
+            row = session.get(Technician, t["id"])
+            if row is not None and (row.home_floor != t["home"] or row.color != t["color"]):
+                row.home_floor, row.color = t["home"], t["color"]
+                if row.status == "AVAILABLE":
+                    row.current_floor = t["home"]
 
     if not session.scalar(select(User.id).limit(1)):
         pw = hash_password(DEMO_PASSWORD)

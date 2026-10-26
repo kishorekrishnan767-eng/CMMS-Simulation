@@ -15,7 +15,7 @@ function LiveValues({ assetId }: { assetId: string }) {
   return (
     <div className="grid grid-cols-4 gap-2" data-testid="live-values">
       {TABS.map((m) => (
-        <div key={m} className="rounded-lg border border-line bg-panel2 p-2">
+        <div key={m} className="rounded-md border border-line bg-panel2 p-2">
           <div className="truncate text-[10px] uppercase tracking-wide text-muted">{METRIC_LABEL[m].split(" ")[0]}</div>
           <div className="text-base font-semibold tabular-nums" data-testid={`val-${m}`}>
             {vals[m] === undefined ? "—" : vals[m].toFixed(m === "speed_command" ? 0 : 2)}
@@ -76,7 +76,7 @@ export default function AssetPanel() {
         <div className="mb-1 flex gap-1" role="tablist" aria-label="Telemetry metric">
           {TABS.map((m) => (
             <button key={m} role="tab" aria-selected={metric === m} onClick={() => setMetric(m)}
-              className={`rounded-md px-2 py-1 text-xs ${metric === m ? "bg-accent text-[#04201c]" : "bg-panel2 text-muted hover:text-ink"}`}>
+              className={`rounded-md px-2 py-1 text-xs ${metric === m ? "bg-accent text-white" : "bg-panel2 text-muted hover:text-ink"}`}>
               {METRIC_LABEL[m].split(" ")[0]}
             </button>
           ))}
@@ -86,7 +86,7 @@ export default function AssetPanel() {
       </div>
 
       {anomaly && anomaly.state === "ACTIVE" ? (
-        <section className="rounded-lg border border-bad/40 bg-bad/5 p-3" data-testid="evidence-card">
+        <section className="rounded-md border border-bad/40 bg-bad/5 p-3" data-testid="evidence-card">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold">{anomaly.incident_id} · {anomaly.severity} · confidence {(anomaly.confidence * 100).toFixed(0)}%</div>
             <Link to="/pipeline" className="text-xs text-accent hover:underline">timeline →</Link>
@@ -103,20 +103,20 @@ export default function AssetPanel() {
           <div className="mt-1 text-[11px] text-muted">*{anomaly.projection_note}. Evidence: {anomaly.evidence?.[0]?.reading_ids.length ?? 0} supporting readings · detected {fmtTime(anomaly.detected_at)}.</div>
         </section>
       ) : (
-        <section className="rounded-lg border border-line p-3 text-sm text-muted">
+        <section className="rounded-md border border-line p-3 text-sm text-muted">
           {h === "WATCH" ? "The detector sees a deviation and is watching it (not yet an anomaly)." : "No active anomaly. Readings follow the load-adjusted baseline."}
         </section>
       )}
 
       {decision && (
-        <section className="rounded-lg border border-line p-3">
+        <section className="rounded-md border border-line p-3">
           <div className="h-section mb-2">Risk decision (Layer 5)</div>
           <RiskBreakdown decision={decision} />
         </section>
       )}
 
       {wo && (
-        <section className="flex items-center justify-between rounded-lg border border-line p-3" data-testid="wo-link">
+        <section className="flex items-center justify-between rounded-md border border-line p-3" data-testid="wo-link">
           <div>
             <div className="text-sm font-semibold">{wo.number} <StatusBadge status={wo.status} /></div>
             <div className="text-xs text-muted">{wo.title}</div>

@@ -90,3 +90,11 @@ export interface InventoryItem { sku: string; name: string; unit: string; unit_c
 
 export interface AuditRow { id: number; username: string; role: string; action: string; target_type: string; target_id: string | null; outcome: "ALLOWED" | "DENIED"; reason: string | null; correlation_id: string | null; occurred_at: string; before: any; after: any }
 export interface TimelineItem { t: string; layer: number; type: string; title: string; detail: string; source: string; work_order?: string | null }
+
+export interface OpsLogEntry { t: string | null; wo: string | null; asset_id: string | null; actor: string; role: string; text: string; kind: "action" | "wait" | "warn" | "fault" | "info" }
+export interface AutopilotState {
+  enabled: boolean; fault_rate: string; fault_rates: string[]; status: string; error: string | null; next_fault_at: string | null;
+  log: OpsLogEntry[]; simulated: boolean;
+}
+export interface ProcedureStep { key: string; label: string; minutes: number }
+export interface ProcedureCatalogue { procedures: Record<string, ProcedureStep[]>; rework: ProcedureStep[]; note: string }

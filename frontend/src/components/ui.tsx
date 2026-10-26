@@ -1,8 +1,8 @@
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../api/client";
 import type { Health, WoStatus } from "../api/types";
-import { useLive } from "../store/live";
+import { simNowMs, useLive } from "../store/live";
 
 export const fmtTime = (iso: string | null | undefined) => {
   if (!iso) return "—";
@@ -14,6 +14,33 @@ export const fmtClock = (ms: number) => {
   const day = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][d.getUTCDay()];
   return `${day} ${d.toISOString().slice(0, 10)} ${d.toISOString().slice(11, 19)} UTC`;
 };
+/** HH:MM of a sim timestamp (ISO or ms). */
+export const fmtHM = (t: string | number | null | undefined) => {
+  if (t == null || t === "") return "—";
+  const ms = typeof t === "number" ? t : Date.parse(t.endsWith("Z") ? t : t + "Z");
+  return Number.isNaN(ms) ? "—" : new Date(ms).toISOString().slice(11, 16);
+};
+export const parseIso = (iso: string | null | undefined) => (iso ? Date.parse(iso.endsWith("Z") ? iso : iso + "Z") : NaN);
+
+/** Current sim time, re-rendering the caller every `intervalMs` of wall time. */
+export function useSimNow(intervalMs = 500) {
+  const [t, setT] = useState(() => simNowMs());
+  useEffect(() => {
+    const id = window.setInterval(() => setT(simNowMs()), intervalMs);
+    return () => window.clearInterval(id);
+  }, [intervalMs]);
+  return t;
+}
+
+export function Progress({ value, tone = "accent" }: { value: number; tone?: "accent" | "ok" | "watch" | "bad" }) {
+  const bg = { accent: "bg-accent", ok: "bg-ok", watch: "bg-watch", bad: "bg-bad" }[tone];
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-line" role="progressbar" aria-valuenow={Math.round(value * 100)} aria-valuemin={0} aria-valuemax={100}>
+      <div className={`h-full rounded-full ${bg} transition-[width] duration-500 ease-out`} style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }} />
+    </div>
+  );
+}
+
 export const fmtMin = (m: number | null | undefined) => (m == null ? "—" : m >= 90 ? `${(m / 60).toFixed(1)} h` : `${m.toFixed(m < 10 ? 1 : 0)} min`);
 export const fmtMoney = (v: number | null | undefined) => (v == null ? "—" : `$${v.toFixed(2)}`);
 
@@ -54,7 +81,7 @@ export function Loading({ label = "Loading…" }: { label?: string }) {
 export function ErrorState({ error, retry }: { error: unknown; retry?: () => void }) {
   const msg = error instanceof Error ? error.message : "Something went wrong";
   return (
-    <div className="m-4 rounded-lg border border-bad/40 bg-bad/10 p-4 text-sm" role="alert">
+    <div className="m-4 rounded-md border border-bad/40 bg-bad/10 p-4 text-sm" role="alert">
       <b className="text-bad">Could not load data.</b> <span className="text-muted">{msg}</span>
       {retry && (
         <button className="btn btn-sm ml-3" onClick={retry}>
@@ -132,7 +159,7 @@ export function Drawer({ open, onClose, title, children, width = 640 }: { open: 
   return (
     <div className="fixed inset-x-0 bottom-0 top-14 z-30 flex justify-end" role="dialog" aria-label="Details">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative flex h-full w-full flex-col border-l border-line bg-panel shadow-2xl" style={{ maxWidth: width }}>
+      <div className="relative flex h-full w-full flex-col border-l border-line bg-panel shadow-lg" style={{ maxWidth: width }}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3">
           <div className="text-base font-semibold">{title}</div>
           <button className="btn btn-sm" onClick={onClose} aria-label="Close">

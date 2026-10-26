@@ -20,7 +20,7 @@ export default function InventoryPage() {
       {data && (
         <>
           {data.low_stock.length > 0 && (
-            <div className="mb-4 rounded-lg border border-watch/50 bg-watch/10 p-3 text-sm text-watch" role="status" data-testid="low-stock">
+            <div className="mb-4 rounded-md border border-watch/50 bg-watch/10 p-3 text-sm text-watch" role="status" data-testid="low-stock">
               Low stock: {data.low_stock.join(", ")} — at or below the reorder level.
             </div>
           )}

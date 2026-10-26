@@ -14,6 +14,7 @@ function Pin({ wo, asset }: { wo: WorkOrderSummary; asset: Asset }) {
   const group = useRef<THREE.Group>(null);
   const mat = useRef<THREE.MeshStandardMaterial>(null);
   const scale = useRef(0);
+  const chip = useRef<HTMLDivElement>(null);
   const layout = ASSET_LAYOUT[asset.asset_type] ?? ASSET_LAYOUT.PUMP;
   const target = useMemo(() => new THREE.Color(WO_COLOR[wo.status] ?? "#8aa4b8"), [wo.status]);
   const closed = wo.status === "CLOSED";
@@ -28,18 +29,20 @@ function Pin({ wo, asset }: { wo: WorkOrderSummary; asset: Asset }) {
     const goal = closed ? Math.max(0, 1 - closedAgo / CLOSED_VISIBLE_MS) * 0.7 : 1;
     scale.current = THREE.MathUtils.damp(scale.current, goal, 5, delta);
     g.scale.setScalar(Math.max(0.0001, scale.current));
-    g.visible = scale.current > 0.02 && ui.showPins;
+    g.visible = scale.current > 0.02 && ui.showPins && (ui.cutaway === null || asset.floor_level <= ui.cutaway);
+    // drei's Html ignores the parent's visibility, so hide the DOM chip explicitly
+    if (chip.current) chip.current.style.display = g.visible ? "" : "none";
     if (mat.current) {
       mat.current.color.lerp(target, 1 - Math.exp(-delta * 6));
       mat.current.emissive.copy(mat.current.color);
     }
-    g.rotation.y += delta * 0.8;
+    g.rotation.y += delta * 0.4;
   });
   return (
     <group ref={group}>
       <mesh position={[0, 0.5, 0]} castShadow>
         <sphereGeometry args={[0.32, 20, 14]} />
-        <meshStandardMaterial ref={mat} color="#8aa4b8" emissive="#8aa4b8" emissiveIntensity={0.9} roughness={0.35} />
+        <meshStandardMaterial ref={mat} color="#8aa4b8" emissive="#8aa4b8" emissiveIntensity={0.35} roughness={0.45} />
       </mesh>
       <mesh position={[0, 0.0, 0]} rotation-x={Math.PI}>
         <coneGeometry args={[0.22, 0.55, 14]} />
@@ -49,8 +52,8 @@ function Pin({ wo, asset }: { wo: WorkOrderSummary; asset: Asset }) {
         <torusGeometry args={[0.2, 0.035, 8, 20]} />
         <meshBasicMaterial color="#ffffff" />
       </mesh>
-      <Html position={[0, 1.15, 0]} center distanceFactor={18} zIndexRange={[21, 0]} style={{ pointerEvents: "none" }}>
-        <div className="wo-pin-chip" style={{ borderColor: WO_COLOR[wo.status] }} data-testid={`pin-${wo.number}`} data-status={wo.status}>
+      <Html position={[0, 1.15, 0]} center zIndexRange={[21, 0]} style={{ pointerEvents: "none" }}>
+        <div ref={chip} className="wo-pin-chip" style={{ borderColor: WO_COLOR[wo.status] }} data-testid={`pin-${wo.number}`} data-status={wo.status}>
           <b>{wo.number}</b> {wo.status.replace("_", " ")}
         </div>
       </Html>

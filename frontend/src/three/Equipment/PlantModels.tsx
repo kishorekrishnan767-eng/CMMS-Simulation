@@ -70,7 +70,7 @@ export function Chiller({ asset }: { asset: Asset }) {
       </mesh>
       <mesh position={[-3.6, 1.5, -1.24]}>
         <boxGeometry args={[0.5, 0.35, 0.02]} />
-        <meshBasicMaterial color="#1fd1b6" />
+        <meshBasicMaterial color="#7fb2e8" />
       </mesh>
       <StatusBar position={[-0.4, 0.6, 1.72]} size={[6, 0.07, 0.03]} />
       {/* refrigerant pipes: chilled supply (blue) and return (red) */}

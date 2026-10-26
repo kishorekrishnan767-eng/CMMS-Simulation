@@ -52,6 +52,16 @@ Optional PostgreSQL: `docker compose up -d db`, `pip install -r backend/requirem
 Demo users (password `demo1234`): `admin`, `operator`, `supervisor`, `tech1`–`tech3`, `verifier`. The
 header role switcher logs in as any of them.
 
+## Live operations (autopilot)
+
+Open **Live twin** and press **Run**. With the **Operations autopilot** on (right panel → Operations),
+equipment wears at random and the simulated crew handles every job through the real workflow: the
+supervisor approves and dispatches, the technician gets a dispatch message in the ground-floor crew room,
+collects tools, rides the glass lift, works through the job procedure on site, and walks back; the verifier
+checks the post-repair window and the supervisor closes the job. Click any machine to follow its job story
+in the **Job** tab (issue → decision → dispatch → travel → repair steps → verification → closure). Switch the
+autopilot off to do every step yourself from **Work orders**; set the wear frequency to Off/Low/Normal/High.
+
 ## Architecture
 
 ```

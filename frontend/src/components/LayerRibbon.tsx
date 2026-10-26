@@ -28,7 +28,7 @@ function Node({ n, name, short }: { n: number; name: string; short: string }) {
   return (
     <button
       onClick={() => useUi.getState().set({ layerPanel: active ? null : n })}
-      className={`layer-node min-w-[92px] flex-1 rounded-lg border px-2.5 py-1.5 text-left transition-colors ${active ? "border-accent bg-panel2" : "border-line bg-panel/80 hover:border-accent/50"} ${pulsing ? "pulsing" : ""}`}
+      className={`layer-node min-w-[92px] flex-1 rounded-md border px-2.5 py-1.5 text-left transition-colors ${active ? "border-accent bg-panel2" : "border-line bg-panel/80 hover:border-accent/50"} ${pulsing ? "pulsing" : ""}`}
       data-testid={`layer-${n}`}
       data-count={count}
       data-pulse={pulse ?? 0}
@@ -51,7 +51,7 @@ function LayerPanel() {
   const layer = LAYERS[n - 1];
   const mine = events.filter((e) => e.layer === n).slice(0, 8);
   return (
-    <div className="glass absolute bottom-full left-0 right-0 mb-2 rounded-xl border border-line p-3 shadow-2xl" data-testid="layer-panel">
+    <div className="glass absolute bottom-full left-0 right-0 mb-2 rounded-md border border-line p-3 shadow-lg" data-testid="layer-panel">
       <div className="flex items-center justify-between">
         <div className="text-sm font-semibold">Layer {n} · {layer.name}</div>
         <button className="btn btn-sm" onClick={() => useUi.getState().set({ layerPanel: null })} aria-label="Close layer panel">✕</button>
@@ -76,7 +76,7 @@ export default function LayerRibbon() {
   return (
     <div className="relative" data-testid="layer-ribbon">
       <LayerPanel />
-      <div className="glass flex items-stretch gap-1 rounded-xl border border-line p-1.5">
+      <div className="glass flex items-stretch gap-1 rounded-md border border-line p-1.5">
         {LAYERS.map((l, i) => (
           <div key={l.n} className="flex min-w-0 flex-1 items-center gap-1">
             <Node n={l.n} name={l.name} short={l.short} />

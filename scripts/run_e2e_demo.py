@@ -110,7 +110,7 @@ class Server:
         self.port, self.db_path, self.proc = port, db_path, None
 
     def start(self) -> None:
-        env = {**os.environ, "DATABASE_URL": f"sqlite:///{self.db_path.as_posix()}"}
+        env = {**os.environ, "DATABASE_URL": f"sqlite:///{self.db_path.as_posix()}", "AUTOPILOT": "false"}
         self.proc = subprocess.Popen([str(PY), "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(self.port)],
                                      cwd=BACKEND, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         import httpx

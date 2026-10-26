@@ -81,7 +81,7 @@ const DOC: Record<number, { purpose: string; inputs: string; algo: string[]; out
   },
 };
 
-const LAYER_COLOR = ["", "#8aa4b8", "#4da3ff", "#8b7bff", "#ffb020", "#ff8a3d", "#1fd1b6", "#2fe0a0"];
+const LAYER_COLOR = ["", "#6b7785", "#3b82c4", "#5a8fa8", "#d08a1a", "#c9661a", "#1f5fbf", "#2f9e5a"];
 
 function Feed({ layer }: { layer: number }) {
   const { data } = useEvents(`layer=${layer}&limit=6`);
@@ -122,7 +122,7 @@ function Timeline() {
         <ol className="relative ml-2 space-y-2 border-l border-line pl-5" data-testid="timeline-items">
           {data.items.map((i, idx) => (
             <li key={idx} className="relative text-sm" data-layer={i.layer} data-type={i.type}>
-              <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-bg" style={{ background: i.type === "ActionDenied" ? "#ff4d4f" : LAYER_COLOR[i.layer] }} />
+              <span className="absolute -left-[27px] top-1 h-3 w-3 rounded-full border-2 border-bg" style={{ background: i.type === "ActionDenied" ? "#c4302b" : LAYER_COLOR[i.layer] }} />
               <div className="flex flex-wrap items-baseline gap-x-2">
                 <span className="tabular-nums text-xs text-muted">{fmtTime(i.t)}</span>
                 <span className="badge badge-muted">L{i.layer}</span>
@@ -147,7 +147,7 @@ export default function PipelinePage() {
           return (
             <section key={l.n} className="card p-4" id={`layer-${l.n}`} data-testid={`layer-section-${l.n}`}>
               <div className="mb-2 flex items-center gap-2">
-                <span className="grid h-7 w-7 place-items-center rounded-lg text-sm font-bold text-[#04201c]" style={{ background: LAYER_COLOR[l.n] }}>{l.n}</span>
+                <span className="grid h-7 w-7 place-items-center rounded-md text-sm font-bold text-white" style={{ background: LAYER_COLOR[l.n] }}>{l.n}</span>
                 <h2 className="text-lg font-semibold">{l.name}</h2>
               </div>
               <p className="text-sm">{d.purpose}</p>

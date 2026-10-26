@@ -1,9 +1,10 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { Link } from "react-router-dom";
 import WebGLGuard from "../components/WebGLGuard";
 import { Loading } from "../components/ui";
 import { APP_NAME, LAYERS } from "../config";
 import { useLive } from "../store/live";
+import { useUi } from "../store/ui";
 
 const TwinScene = lazy(() => import("../three/Scene"));
 
@@ -15,7 +16,7 @@ function FlowNode({ n }: { n: number }) {
   return (
     <li className={`card relative flex-1 p-3 transition-colors ${recent ? "border-accent" : ""}`} data-testid={`flow-${n}`}>
       <div className="flex items-center justify-between">
-        <span className="grid h-6 w-6 place-items-center rounded bg-accent text-xs font-bold text-[#04201c]">{n}</span>
+        <span className="grid h-6 w-6 place-items-center rounded bg-accent text-xs font-bold text-white">{n}</span>
         <span className="text-[11px] tabular-nums text-muted" title="live event count from the backend">{count.toLocaleString()}</span>
       </div>
       <div className="mt-2 text-sm font-semibold">{l.name}</div>
@@ -27,6 +28,12 @@ function FlowNode({ n }: { n: number }) {
 }
 
 export default function Landing() {
+  // the hero twin is a backdrop: no machine / pin / technician labels over the headline
+  useEffect(() => {
+    const { showLabels, showPins, showTechnicians } = useUi.getState();
+    useUi.setState({ showLabels: false, showPins: false, showTechnicians: false });
+    return () => useUi.setState({ showLabels, showPins, showTechnicians });
+  }, []);
   return (
     <div className="pt-14">
       <style>{`@keyframes flow{0%{opacity:0;transform:translateX(-14px)}20%{opacity:1}80%{opacity:1}100%{opacity:0;transform:translateX(14px)}}`}</style>

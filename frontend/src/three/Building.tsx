@@ -4,7 +4,8 @@ import * as THREE from "three";
 import { simNowMs } from "../store/live";
 import { useUi } from "../store/ui";
 import { QUALITY } from "./SceneEnvironment";
-import { BUILD_D, BUILD_W, CORE, FLOOR_H, LEVELS, ROOF_LEVEL, SLAB_T, explodeOffset, floorY, mulberry32, occupancyAt } from "./constants";
+import { BUILD_D, BUILD_W, CORE, FLOOR_H, LEVELS, LIFT, ROOF_LEVEL, SLAB_T, explodeOffset, floorY, mulberry32, occupancyAt } from "./constants";
+import { CrewRoom } from "./CrewRoom";
 
 const HX = BUILD_W / 2;
 const HZ = BUILD_D / 2;
@@ -27,19 +28,18 @@ let _signTex: THREE.CanvasTexture | null = null;
 function signTexture() {
   if (!_signTex) {
     _signTex = canvasTexture((g, w, h) => {
-      g.fillStyle = "#0b2a2e";
+      g.fillStyle = "#24292f";
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = "#1fd1b6";
-      g.lineWidth = 6;
-      g.strokeRect(6, 6, w - 12, h - 12);
-      g.fillStyle = "#e8fffb";
-      g.font = "700 64px Inter, system-ui, sans-serif";
-      g.textAlign = "center";
+      g.fillStyle = "#e9ecef";
+      g.fillRect(0, h - 10, w, 10);
+      g.fillStyle = "#f4f5f6";
+      g.font = "600 66px Inter, system-ui, sans-serif";
+      g.textAlign = "left";
       g.textBaseline = "middle";
-      g.fillText("TOWER A", w / 2, h / 2 - 8);
-      g.fillStyle = "#1fd1b6";
-      g.font = "500 26px Inter, system-ui, sans-serif";
-      g.fillText("SIMULATED DIGITAL TWIN", w / 2, h / 2 + 44);
+      g.fillText("Tower A", 34, h / 2 - 14);
+      g.fillStyle = "#9aa3ad";
+      g.font = "500 22px Inter, system-ui, sans-serif";
+      g.fillText("SIMULATED BUILDING · DEMO DATA", 36, h / 2 + 40);
     }, 512, 160);
   }
   return _signTex;
@@ -49,9 +49,9 @@ let _ceilTex: THREE.CanvasTexture | null = null;
 function ceilingTexture() {
   if (!_ceilTex) {
     _ceilTex = canvasTexture((g, w, h) => {
-      g.fillStyle = "#cfd8dc";
+      g.fillStyle = "#eef0f2";
       g.fillRect(0, 0, w, h);
-      g.strokeStyle = "#8795a0";
+      g.strokeStyle = "#b9c0c6";
       g.lineWidth = 3;
       g.strokeRect(0, 0, w, h);
     }, 64, 64, [20, 12]);
@@ -74,14 +74,14 @@ interface Mats {
 function useFloorMaterials(): Mats {
   return useMemo(() => {
     const std = (color: string, extra: Partial<THREE.MeshStandardMaterialParameters> = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.8, metalness: 0.05, ...extra });
-    const slab = std("#4a5963", { roughness: 0.9 });
-    const glass = std("#79c9d4", { roughness: 0.06, metalness: 0.35, transparent: true, opacity: 0.22, depthWrite: false, envMapIntensity: 1.4 });
-    const wall = std("#b9c4cb");
-    const metal = std("#2f3b44", { metalness: 0.6, roughness: 0.4 });
-    const desk = std("#9aa8b1");
-    const core = std("#55646f", { roughness: 0.7 });
+    const slab = std("#a3aab1", { roughness: 0.9 });
+    const glass = std("#b7cfdf", { roughness: 0.06, metalness: 0.25, transparent: true, opacity: 0.2, depthWrite: false, envMapIntensity: 1.2 });
+    const wall = std("#e3e6e9");
+    const metal = std("#8e979f", { metalness: 0.55, roughness: 0.4 });
+    const desk = std("#d9dcdf");
+    const core = std("#b5bbc1", { roughness: 0.7 });
     const light = new THREE.MeshBasicMaterial({ color: "#fff6dd", transparent: true, opacity: 0.95 });
-    const ceiling = std("#cfd8dc", { map: ceilingTexture(), roughness: 0.95, side: THREE.DoubleSide });
+    const ceiling = std("#ffffff", { map: ceilingTexture(), roughness: 0.95, side: THREE.DoubleSide });
     return { slab, glass, wall, metal, desk, core, light, ceiling, all: [slab, glass, wall, metal, desk, core, ceiling] };
   }, []);
 }
@@ -166,6 +166,8 @@ export function Floor({ level, children }: FloorProps) {
     const targetY = floorY(level) + explodeOffset(level, ui.explode);
     g.position.y = THREE.MathUtils.damp(g.position.y, targetY, ui.reducedMotion ? 60 : 5, delta);
     const isolatedOut = ui.isolatedFloor !== null && ui.isolatedFloor !== level;
+    // cutaway: everything above the inspected level is lifted off (like a section drawing)
+    g.visible = ui.cutaway === null || level <= ui.cutaway;
     const target = isolatedOut ? 1 : ui.xray ? 0.7 : 0;
     ghost.current = THREE.MathUtils.damp(ghost.current, target, 8, delta);
     const k = ghost.current;
@@ -174,8 +176,9 @@ export function Floor({ level, children }: FloorProps) {
     mats.core.opacity = 1 - k * 0.8;
     mats.desk.opacity = 1 - k * 0.9;
     mats.ceiling.opacity = 1 - k * 0.95;
-    mats.glass.opacity = 0.22 * (1 - k * 0.8);
-    for (const m of [mats.slab, mats.wall, mats.core, mats.desk, mats.ceiling]) {
+    mats.metal.opacity = 1 - k * 0.92;
+    mats.glass.opacity = 0.2 * (1 - k * 0.8);
+    for (const m of [mats.slab, mats.wall, mats.core, mats.desk, mats.ceiling, mats.metal]) {
       m.transparent = k > 0.02;
       m.depthWrite = k < 0.5;
     }
@@ -195,8 +198,8 @@ export function Floor({ level, children }: FloorProps) {
         <boxGeometry args={[BUILD_W, SLAB_T, BUILD_D]} />
       </mesh>
 
-      {/* structure */}
-      <instancedMesh ref={columns} args={[undefined, undefined, colPos.length]} material={mats.core} castShadow={false} frustumCulled={false}>
+      {/* structure (the roof deck has no columns above it) */}
+      <instancedMesh visible={!isRoof} ref={columns} args={[undefined, undefined, colPos.length]} material={mats.core} castShadow={false} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
       </instancedMesh>
 
@@ -264,8 +267,8 @@ export function Floor({ level, children }: FloorProps) {
             <meshStandardMaterial color="#1b252c" metalness={0.7} roughness={0.3} />
           </mesh>
 
-          {/* interior partitions */}
-          {PARTITIONS.map(([x, z, w, d], i) => (
+          {/* interior partitions (office floors; the ground floor is an open lobby plus the crew room) */}
+          {level >= 1 && PARTITIONS.map(([x, z, w, d], i) => (
             <mesh key={i} position={[x, wallH / 2, z]} material={mats.wall}>
               <boxGeometry args={[w, wallH, d]} />
             </mesh>
@@ -283,6 +286,7 @@ export function Floor({ level, children }: FloorProps) {
             </instancedMesh>
           )}
           {level === 0 && <Lobby mats={mats} />}
+          {level === 0 && <CrewRoom />}
         </>
       )}
 
@@ -300,7 +304,7 @@ function Lobby({ mats }: { mats: Mats }) {
       </mesh>
       <mesh position={[-6, 1.12, 5]}>
         <boxGeometry args={[7.2, 0.06, 1.4]} />
-        <meshStandardMaterial color="#1fd1b6" emissive="#1fd1b6" emissiveIntensity={0.25} />
+        <meshStandardMaterial color="#8a6a4e" roughness={0.6} />
       </mesh>
       {[-2, 0, 2].map((x) => (
         <mesh key={x} position={[x, 1.1, HZ - 0.12]}>
@@ -336,7 +340,9 @@ function RoofDeck({ mats }: { mats: Mats }) {
   );
   return (
     <group>
-      {wall([0, 0.5, HZ - 0.15], [BUILD_W, 1, 0.3])}
+      {/* front parapet, open where the glass lift arrives */}
+      {wall([(-HX + LIFT.x - 1.1) / 2, 0.5, HZ - 0.15], [LIFT.x - 1.1 + HX, 1, 0.3])}
+      {wall([(HX + LIFT.x + 1.1) / 2, 0.5, HZ - 0.15], [HX - LIFT.x - 1.1, 1, 0.3])}
       {wall([0, 0.5, -HZ + 0.15], [BUILD_W, 1, 0.3])}
       {wall([HX - 0.15, 0.5, 0], [0.3, 1, BUILD_D])}
       {wall([-HX + 0.15, 0.5, 0], [0.3, 1, BUILD_D])}

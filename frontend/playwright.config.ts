@@ -53,7 +53,7 @@ export default defineConfig({
       url: `http://127.0.0.1:${BACKEND_PORT}/api/health`,
       timeout: 180_000,
       reuseExistingServer: false,
-      env: { DATABASE_URL: `sqlite:///${dbFile.replace(/\\/g, "/")}`, DEMO_PACE: "0.12", CORS_ORIGINS: `http://localhost:${FRONTEND_PORT}` },
+      env: { DATABASE_URL: `sqlite:///${dbFile.replace(/\\/g, "/")}`, DEMO_PACE: "0.12", AUTOPILOT: "false", CORS_ORIGINS: `http://localhost:${FRONTEND_PORT}` },
     },
     {
       command: `npx vite --port ${FRONTEND_PORT} --strictPort`,
