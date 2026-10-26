@@ -1,4 +1,4 @@
-"""Seed data: Tower A, assets, sensors, users, technicians, shifts, inventory, simulation state.
+"""Seed data: the Livewire Digital Solutions building, assets, sensors, users, technicians, shifts, inventory, simulation state.
 
 Seeding is idempotent per table (skips when rows exist). The simulation epoch is a Monday at 02:00
 UTC; after the 6 h warm start "now" is 08:00 (start of the working day) — see ASSUMPTIONS #4.
@@ -16,7 +16,8 @@ from app.models import (
 )
 from app.security import hash_password
 
-BUILDING_ID = "TOWER-A"
+BUILDING_ID = "TOWER-A"  # internal id kept stable; the display name is BUILDING_NAME
+BUILDING_NAME = "Livewire Digital Solutions"
 SIM_EPOCH = datetime(2026, 3, 2, 2, 0, 0)  # Monday
 DEMO_PASSWORD = "demo1234"
 FLOOR_HEIGHT_M = 4.0
@@ -24,13 +25,16 @@ FLOOR_HEIGHT_M = 4.0
 FLOORS = [
     (-1, "Basement plant room", "BASEMENT"),
     (0, "Ground lobby", "LOBBY"),
-    (1, "Floor 1", "OFFICE"), (2, "Floor 2", "OFFICE"), (3, "Floor 3", "OFFICE"),
-    (4, "Floor 4", "OFFICE"), (5, "Floor 5", "OFFICE"),
+    (1, "Floor 1 · Development", "OFFICE"), (2, "Floor 2 · Development & server room", "OFFICE"),
+    (3, "Floor 3 · BMS control room", "OFFICE"), (4, "Floor 4 · Project teams", "OFFICE"),
+    (5, "Floor 5 · Management", "OFFICE"),
     (6, "Roof plant deck", "ROOF"),
 ]
 
 FAN_SIM = {"vib_base": 0.5, "vib_gain": 1.5, "vib_noise": 0.08, "temp_base": 42.0, "temp_gain": 12.0,
            "temp_noise": 0.4, "cur_gain": 10.0, "cur_noise": 0.15, "fault_vib_to_temp": 0.9, "fault_vib_to_cur": 0.12}
+
+_FCU_SIM = dict(vib_base=0.3, vib_gain=0.9, temp_base=34.0, temp_gain=6.0, cur_gain=1.8, cur_noise=0.04)
 
 # id, name, type, level, criticality, skills, manufacturer/model, runtime, pos(x,z), sim overrides
 ASSETS: list[dict] = [
@@ -55,6 +59,18 @@ ASSETS: list[dict] = [
     dict(id="FCU-03-01", name="Fan coil unit F3-01", type="FCU", level=3, crit="LOW",
          skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="FC-12", hours=12400, x=8.0, z=5.0,
          sim=dict(vib_base=0.3, vib_gain=0.9, temp_base=34.0, temp_gain=6.0, cur_gain=1.8, cur_noise=0.04)),
+    # office air-conditioning (fan coil units) and the server-room precision AC
+    dict(id="FCU-01-01", name="AC unit F1 (development)", type="FCU", level=1, crit="LOW",
+         skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="FC-12", hours=11800, x=8.0, z=5.0, sim=dict(_FCU_SIM)),
+    dict(id="FCU-02-01", name="AC unit F2 (development)", type="FCU", level=2, crit="LOW",
+         skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="FC-12", hours=9600, x=8.0, z=-5.0, sim=dict(_FCU_SIM)),
+    dict(id="CRAC-02-01", name="Server-room precision AC", type="FCU", level=2, crit="HIGH",
+         skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="PX-20", hours=26300, x=-16.0, z=8.0,
+         sim=dict(_FCU_SIM, cur_gain=4.5)),
+    dict(id="FCU-04-01", name="AC unit F4 (project teams)", type="FCU", level=4, crit="LOW",
+         skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="FC-12", hours=10100, x=8.0, z=5.0, sim=dict(_FCU_SIM)),
+    dict(id="FCU-05-01", name="AC unit F5 (management)", type="FCU", level=5, crit="MEDIUM",
+         skills=["HVAC_MECHANICAL"], make="ClimateWorks", model="FC-12", hours=8700, x=8.0, z=-5.0, sim=dict(_FCU_SIM)),
 ]
 
 SENSOR_DEFS = [
@@ -86,7 +102,7 @@ TECHNICIANS = [
 USERS = [
     ("admin", "Ada Admin", "ADMIN", None),
     ("operator", "Omar Operator", "OPERATOR", None),
-    ("supervisor", "Sofia Supervisor", "SUPERVISOR", None),
+    ("supervisor", "Kishore", "SUPERVISOR", None),  # BMS supervisor at the Floor 3 control room
     ("tech1", "Arjun Mehta", "TECHNICIAN", "TECH-01"),
     ("tech2", "Priya Nair", "TECHNICIAN", "TECH-02"),
     ("tech3", "Sam Okafor", "TECHNICIAN", "TECH-03"),
@@ -105,18 +121,25 @@ INVENTORY = [
 def seed_reference_data(session: Session) -> None:
     """Seed everything except detector/policy rows (created by their own modules)."""
     if session.get(Building, BUILDING_ID) is None:
-        session.add(Building(id=BUILDING_ID, name="Tower A",
-                             description="Commercial office — ground lobby, five floors, roof plant deck, basement plant room",
+        session.add(Building(id=BUILDING_ID, name=BUILDING_NAME,
+                             description="Office HQ — ground lobby, five office floors, roof plant deck, basement plant room",
                              address="Demo Business Park (fictional)"))
         session.flush()
         for level, name, kind in FLOORS:
             session.add(Floor(building_id=BUILDING_ID, level=level, name=name, kind=kind,
                               elevation_m=level * FLOOR_HEIGHT_M))
         session.flush()
+    else:
+        # reference data evolves between versions (building / floor names): keep existing databases in sync
+        building = session.get(Building, BUILDING_ID)
+        assert building is not None
+        building.name = BUILDING_NAME
+        for f in session.scalars(select(Floor).where(Floor.building_id == BUILDING_ID)):
+            f.name = next((n for lvl, n, _ in FLOORS if lvl == f.level), f.name)
 
     floor_by_level = {f.level: f for f in session.scalars(select(Floor).where(Floor.building_id == BUILDING_ID))}
-    if not session.scalar(select(Asset.id).limit(1)):
-        for idx, a in enumerate(ASSETS, start=1):
+    for idx, a in enumerate(ASSETS, start=1):
+        if session.get(Asset, a["id"]) is None:  # also adds assets introduced after the database was created
             floor = floor_by_level[a["level"]]
             sim = {**FAN_SIM, **a["sim"]}
             session.add(Asset(
@@ -155,6 +178,11 @@ def seed_reference_data(session: Session) -> None:
                 if row.status == "AVAILABLE":
                     row.current_floor = t["home"]
 
+    if session.scalar(select(User.id).limit(1)):
+        for username, display, _role, _tech in USERS:
+            u = session.scalar(select(User).where(User.username == username))
+            if u is not None and u.display_name != display:
+                u.display_name = display
     if not session.scalar(select(User.id).limit(1)):
         pw = hash_password(DEMO_PASSWORD)
         for username, display, role, tech in USERS:

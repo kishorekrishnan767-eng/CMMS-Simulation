@@ -52,6 +52,16 @@ Optional PostgreSQL: `docker compose up -d db`, `pip install -r backend/requirem
 Demo users (password `demo1234`): `admin`, `operator`, `supervisor`, `tech1`–`tech3`, `verifier`. The
 header role switcher logs in as any of them.
 
+## The building, the city and the people
+
+The live view shows the Livewire Digital Solutions building inside a small animated city (traffic, pedestrians,
+clouds, aircraft, sun and moon that follow the simulation clock). Inside, developers sit at their desks on
+Floors 1, 2 and 4, management on Floor 5, and **Kishore, the BMS supervisor**, works at a console in the
+Floor 3 control room under a live video wall of every machine. Pick **Kishore** (or anyone) in the People
+list on the left: the camera trails them from the street, through the lobby and glass lift, to their desk.
+The **BMS room** camera button shows the control room. Use **Watch the demo** for a guided, plain-language
+walk through one incident: early warning, risk decision, approval, dispatch, repair and independent check.
+
 ## Live operations (autopilot)
 
 Open **Live twin** and press **Run**. With the **Operations autopilot** on (right panel → Operations),

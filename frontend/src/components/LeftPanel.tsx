@@ -2,6 +2,10 @@ import { useTree } from "../api/queries";
 import type { Health } from "../api/types";
 import { useLive } from "../store/live";
 import { useUi, type Quality } from "../store/ui";
+import { EMPLOYEES } from "../three/office";
+import { staffPose } from "../three/staff";
+import { simNowMs } from "../store/live";
+import { useSimNow } from "./ui";
 import { Loading } from "./ui";
 
 function Toggle({ label, on, onChange, testid }: { label: string; on: boolean; onChange: (v: boolean) => void; testid?: string }) {
@@ -20,9 +24,37 @@ function Dot({ id, fallback }: { id: string; fallback: Health }) {
 
 const FLOOR_LABEL = (level: number) => (level === 6 ? "Roof" : level === -1 ? "B1" : level === 0 ? "G" : `F${level}`);
 const CAMERAS = [
-  ["Overview", { preset: "overview" }], ["Roof plant", { preset: "roof" }], ["Basement B1", { preset: "plant" }],
-  ["Crew room", { preset: "crew" }], ["Floor 3", { preset: "floor", floor: 3 }],
+  ["Overview", { preset: "overview" }], ["Roof", { preset: "roof" }], ["Basement", { preset: "plant" }],
+  ["Crew room", { preset: "crew" }], ["BMS room", { preset: "bms" }],
 ] as const;
+
+const PHASE_DOT: Record<string, string> = { away: "bg-line", arriving: "bg-accent", seated: "bg-ok", leaving: "bg-watch" };
+
+/** The named employees: click one to follow them (Kishore walks in, takes the lift and sits at the BMS desk). */
+function People() {
+  useSimNow(1000);
+  const selected = useUi((s) => s.selectedPersonId);
+  return (
+    <ul className="space-y-0.5" data-testid="people-list">
+      {EMPLOYEES.map((e) => {
+        const p = staffPose(e, simNowMs());
+        return (
+          <li key={e.id}>
+            <button
+              onClick={() => useUi.getState().selectPerson(e.id)}
+              className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs ${selected === e.id ? "bg-accent/10 text-accent" : "hover:bg-panel2"}`}
+              data-testid={`person-${e.name.toLowerCase()}`}
+            >
+              <i className={`h-2 w-2 shrink-0 rounded-full ${PHASE_DOT[p.phase]}`} />
+              <span className="font-semibold">{e.name}</span>
+              <span className="truncate text-muted">{p.phase === "away" ? "not in yet" : e.role}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export default function LeftPanel() {
   const { data: tree, isLoading } = useTree();
@@ -39,6 +71,11 @@ export default function LeftPanel() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section>
+        <div className="h-section mb-1">People</div>
+        <People />
       </section>
 
       <section>
@@ -83,18 +120,18 @@ export default function LeftPanel() {
           <input type="range" min={0} max={1} step={0.05} value={ui.explode} onChange={(e) => ui.set({ explode: Number(e.target.value) })} className="mt-1 w-full accent-[rgb(var(--accent))]" aria-label="Exploded view" data-testid="explode" />
         </label>
         <Toggle label="X-ray shell" on={ui.xray} onChange={(v) => ui.set({ xray: v })} testid="toggle-xray" />
-        <Toggle label="Condition heat overlay" on={ui.heat} onChange={(v) => ui.set({ heat: v })} testid="toggle-heat" />
-        <Toggle label="Sensor markers" on={ui.showSensors} onChange={(v) => ui.set({ showSensors: v })} />
-        <Toggle label="Asset labels" on={ui.showLabels} onChange={(v) => ui.set({ showLabels: v })} />
+        <Toggle label="Condition heat map" on={ui.heat} onChange={(v) => ui.set({ heat: v })} testid="toggle-heat" />
+        <Toggle label="Sensors" on={ui.showSensors} onChange={(v) => ui.set({ showSensors: v })} />
+        <Toggle label="Labels" on={ui.showLabels} onChange={(v) => ui.set({ showLabels: v })} />
         <Toggle label="Work-order pins" on={ui.showPins} onChange={(v) => ui.set({ showPins: v })} />
-        <Toggle label="Technicians" on={ui.showTechnicians} onChange={(v) => ui.set({ showTechnicians: v })} />
+        <Toggle label="People" on={ui.showTechnicians} onChange={(v) => ui.set({ showTechnicians: v })} />
         {(ui.isolatedFloor !== null || ui.cutaway !== null) && (
           <button className="btn btn-sm mt-1 w-full" onClick={() => ui.set({ isolatedFloor: null, cutaway: null })}>Show all floors</button>
         )}
       </section>
 
       <section>
-        <div className="h-section mb-1">Graphics quality</div>
+        <div className="h-section mb-1">Graphics</div>
         <div className="seg" role="group" aria-label="Graphics quality">
           {(["low", "medium", "high"] as Quality[]).map((q) => (
             <button key={q} onClick={() => ui.setQuality(q)} aria-pressed={ui.quality === q} data-testid={`quality-${q}`} className="capitalize">
@@ -102,8 +139,6 @@ export default function LeftPanel() {
             </button>
           ))}
         </div>
-        <Toggle label="Auto-downgrade if FPS drops" on={ui.autoQuality} onChange={(v) => ui.set({ autoQuality: v })} />
-        <div className="px-2 text-[11px] text-muted" data-testid="fps">{ui.fps ? `${ui.fps} fps` : "measuring…"}</div>
       </section>
     </div>
   );

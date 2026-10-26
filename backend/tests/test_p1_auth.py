@@ -7,7 +7,7 @@ from app.models import AuditLog, Asset, Sensor
 def test_seed_building_assets_sensors(world):
     with read_session() as s:
         assets = {a.id: a for a in s.scalars(select(Asset))}
-        assert len(assets) == 8
+        assert len(assets) == 13  # 8 plant assets + 5 office / server-room AC units
         fan = assets["AHU-02-FAN-01"]
         assert fan.criticality == "HIGH" and fan.floor.level == 6
         sensors = s.scalars(select(Sensor).where(Sensor.asset_id == fan.id)).all()

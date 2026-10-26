@@ -1,13 +1,15 @@
 import { create } from "zustand";
 
 export type Quality = "low" | "medium" | "high";
-export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "floor" | "asset" | "follow";
+export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "bms" | "entrance" | "floor" | "asset" | "follow" | "person";
 export type ThemeMode = "dark" | "light";
 
 export interface CameraGoal {
   preset: CameraPreset;
   floor?: number;
   assetId?: string;
+  /** Employee id for the "person" preset (camera trails them, with the floors above cut away). */
+  personId?: string;
   close?: boolean;
   nonce: number;
 }
@@ -47,7 +49,11 @@ interface UiState {
   fps: number;
   rightPanelOpen: boolean;
   /** "auto" resolves to the job tab when the selected asset has open work, else its telemetry. */
-  rightTab: "ops" | "job" | "asset" | "auto";
+  rightTab: "ops" | "job" | "asset" | "person" | "auto";
+  selectedPersonId: string | null;
+  /** Id of the person the camera is currently trailing (technician or employee). */
+  following: string | null;
+  selectPerson: (id: string | null) => void;
   layerPanel: number | null;
   setQuality: (q: Quality) => void;
   set: (patch: Partial<UiState>) => void;
@@ -76,6 +82,8 @@ export const useUi = create<UiState>((set, get) => ({
   fps: 0,
   rightPanelOpen: true,
   rightTab: "ops",
+  selectedPersonId: null,
+  following: null,
   layerPanel: null,
   setQuality: (q) => {
     write("twincmms.quality", q);
@@ -88,8 +96,12 @@ export const useUi = create<UiState>((set, get) => ({
     set(patch);
   },
   selectAsset: (id, fly = true) => {
-    set({ selectedAssetId: id, rightPanelOpen: true, rightTab: id ? "auto" : "ops" });
+    set({ selectedAssetId: id, selectedPersonId: null, rightPanelOpen: true, rightTab: id ? "auto" : "ops" });
     if (id && fly) get().fly({ preset: "asset", assetId: id });
+  },
+  selectPerson: (id) => {
+    set({ selectedPersonId: id, selectedAssetId: null, rightPanelOpen: true, rightTab: id ? "person" : "ops" });
+    if (id) get().fly({ preset: "person", personId: id });  // CameraRig falls back to the entrance while they are not in yet
   },
   fly: (goal) => set({ cameraGoal: { ...goal, nonce: nonce++ } }),
 }));

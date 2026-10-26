@@ -6,6 +6,7 @@ import { useUi } from "../store/ui";
 import { QUALITY } from "./SceneEnvironment";
 import { BUILD_D, BUILD_W, CORE, FLOOR_H, LEVELS, LIFT, ROOF_LEVEL, SLAB_T, explodeOffset, floorY, mulberry32, occupancyAt } from "./constants";
 import { CrewRoom } from "./CrewRoom";
+import { Interior } from "./Interior";
 
 const HX = BUILD_W / 2;
 const HZ = BUILD_D / 2;
@@ -25,22 +26,34 @@ function canvasTexture(draw: (g: CanvasRenderingContext2D, w: number, h: number)
 }
 
 let _signTex: THREE.CanvasTexture | null = null;
+/** Company sign: dark panel, white wordmark, blue accent. Reused for the lobby wall and the roof sign. */
 function signTexture() {
   if (!_signTex) {
     _signTex = canvasTexture((g, w, h) => {
-      g.fillStyle = "#24292f";
+      g.fillStyle = "#1b2026";
       g.fillRect(0, 0, w, h);
-      g.fillStyle = "#e9ecef";
-      g.fillRect(0, h - 10, w, 10);
-      g.fillStyle = "#f4f5f6";
-      g.font = "600 66px Inter, system-ui, sans-serif";
+      g.fillStyle = "#2f6fd6";
+      g.fillRect(0, h - 12, w, 12);
+      g.fillStyle = "#f4f6f8";
       g.textAlign = "left";
       g.textBaseline = "middle";
-      g.fillText("Tower A", 34, h / 2 - 14);
-      g.fillStyle = "#9aa3ad";
-      g.font = "500 22px Inter, system-ui, sans-serif";
-      g.fillText("SIMULATED BUILDING · DEMO DATA", 36, h / 2 + 40);
-    }, 512, 160);
+      g.font = "700 96px Inter, system-ui, sans-serif";
+      g.fillText("LIVEWIRE", 44, h / 2 - 22);
+      g.fillStyle = "#9db2c7";
+      g.font = "500 40px Inter, system-ui, sans-serif";
+      g.fillText("DIGITAL SOLUTIONS", 48, h / 2 + 52);
+      g.fillStyle = "#2f6fd6";
+      g.beginPath();
+      g.arc(w - 90, h / 2 - 8, 34, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = "#f4f6f8";
+      g.lineWidth = 7;
+      g.beginPath();
+      g.moveTo(w - 112, h / 2 - 8);
+      g.lineTo(w - 98, h / 2 + 8);
+      g.lineTo(w - 78, h / 2 - 24);
+      g.stroke();
+    }, 1024, 256);
   }
   return _signTex;
 }
@@ -86,11 +99,6 @@ function useFloorMaterials(): Mats {
   }, []);
 }
 
-const PARTITIONS: [number, number, number, number][] = [
-  // [x, z, width, depth] — corridor walls and meeting rooms
-  [-6, 2.0, 22, 0.15], [-6, -2.0, 22, 0.15], [10.6, 5.5, 0.15, 7], [10.6, -5.5, 0.15, 7], [14, 3.0, 7, 0.15],
-];
-
 interface FloorProps {
   level: number;
   children?: ReactNode;
@@ -111,8 +119,8 @@ export function Floor({ level, children }: FloorProps) {
   // Instanced meshes -----------------------------------------------------------------------
   const columns = useRef<THREE.InstancedMesh>(null);
   const mullions = useRef<THREE.InstancedMesh>(null);
-  const desks = useRef<THREE.InstancedMesh>(null);
   const lights = useRef<THREE.InstancedMesh>(null);
+  const ceil = useRef<THREE.Mesh>(null);
 
   const colPos = useMemo(() => {
     const out: [number, number][] = [];
@@ -127,11 +135,6 @@ export function Floor({ level, children }: FloorProps) {
     for (let z = -HZ + 2.5; z < HZ; z += 2.5) {
       out.push([HX, z, 0.12, 0.1], [-HX, z, 0.12, 0.1]);
     }
-    return out;
-  }, []);
-  const deskPos = useMemo(() => {
-    const out: [number, number][] = [];
-    for (let x = -17; x <= 9.5; x += 3.4) for (const z of [4.6, 8, -4.6, -8]) out.push([x, z]);
     return out;
   }, []);
   const lightPos = useMemo(() => {
@@ -151,12 +154,11 @@ export function Floor({ level, children }: FloorProps) {
     };
     colPos.forEach(([x, z], i) => place(columns.current, i, x, isBasement ? FLOOR_H / 2 : FLOOR_H / 2 - SLAB_T / 2, z, 0.5, FLOOR_H - SLAB_T, 0.5));
     mullionPos.forEach(([x, z, sx, sz], i) => place(mullions.current, i, x, (FLOOR_H - SLAB_T) / 2, z, sx, FLOOR_H - SLAB_T, sz));
-    deskPos.forEach(([x, z], i) => place(desks.current, i, x, 0.38, z, 1.5, 0.76, 0.75));
     lightPos.forEach(([x, z], i) => place(lights.current, i, x, FLOOR_H - SLAB_T - 0.06, z, 1.6, 0.04, 0.5));
-    [columns, mullions, desks, lights].forEach((r) => {
+    [columns, mullions, lights].forEach((r) => {
       if (r.current) r.current.instanceMatrix.needsUpdate = true;
     });
-  }, [colPos, mullionPos, deskPos, lightPos, isBasement, q.mullions]);
+  }, [colPos, mullionPos, lightPos, isBasement, q.mullions]);
 
   // Per-frame: explode offset, ghosting, occupancy-driven lights --------------------------------
   useFrame((_, delta) => {
@@ -165,6 +167,10 @@ export function Floor({ level, children }: FloorProps) {
     if (!g) return;
     const targetY = floorY(level) + explodeOffset(level, ui.explode);
     g.position.y = THREE.MathUtils.damp(g.position.y, targetY, ui.reducedMotion ? 60 : 5, delta);
+    // the top visible floor of a cutaway loses its ceiling so the camera can look straight in
+    const open = ui.cutaway === level;
+    if (ceil.current) ceil.current.visible = !open;
+    if (lights.current) lights.current.visible = !open;
     const isolatedOut = ui.isolatedFloor !== null && ui.isolatedFloor !== level;
     // cutaway: everything above the inspected level is lifted off (like a section drawing)
     g.visible = ui.cutaway === null || level <= ui.cutaway;
@@ -184,9 +190,11 @@ export function Floor({ level, children }: FloorProps) {
     }
     const occ = occupancyAt(simNowMs());
     const on = occ > rand * 0.85 ? 1 : 0;
-    const bright = hasInterior ? (0.12 + 0.88 * occ) * on : isBasement ? 0.9 : 0.1;
+    // the lobby and the BMS control room are staffed round the clock, so they stay lit at night
+    const always = level === 0 || level === 3 ? 0.85 : 0;
+    const bright = hasInterior ? Math.max((0.12 + 0.88 * occ) * on, always) : isBasement ? 0.9 : 0.1;
     lightMat.color.setRGB(1 * bright, 0.96 * bright, 0.86 * bright);
-    lightMat.opacity = (1 - k * 0.9) * (on || isBasement ? 1 : 0.15);
+    lightMat.opacity = (1 - k * 0.9) * (on || isBasement || always > 0 ? 1 : 0.15);
   });
 
   const wallH = FLOOR_H - SLAB_T;
@@ -267,24 +275,14 @@ export function Floor({ level, children }: FloorProps) {
             <meshStandardMaterial color="#1b252c" metalness={0.7} roughness={0.3} />
           </mesh>
 
-          {/* interior partitions (office floors; the ground floor is an open lobby plus the crew room) */}
-          {level >= 1 && PARTITIONS.map(([x, z, w, d], i) => (
-            <mesh key={i} position={[x, wallH / 2, z]} material={mats.wall}>
-              <boxGeometry args={[w, wallH, d]} />
-            </mesh>
-          ))}
           {/* ceiling grid and light panels */}
-          <mesh position={[0, wallH - 0.02, 0]} rotation-x={Math.PI / 2} material={mats.ceiling}>
+          <mesh ref={ceil} position={[0, wallH - 0.02, 0]} rotation-x={Math.PI / 2} material={mats.ceiling}>
             <planeGeometry args={[BUILD_W - 0.4, BUILD_D - 0.4]} />
           </mesh>
           <instancedMesh ref={lights} args={[undefined, undefined, lightPos.length]} material={lightMat} frustumCulled={false}>
             <boxGeometry args={[1, 1, 1]} />
           </instancedMesh>
-          {level >= 1 && (
-            <instancedMesh ref={desks} args={[undefined, undefined, deskPos.length]} material={mats.desk} frustumCulled={false}>
-              <boxGeometry args={[1, 1, 1]} />
-            </instancedMesh>
-          )}
+          {level >= 1 && <Interior level={level} ghost={ghost} />}
           {level === 0 && <Lobby mats={mats} />}
           {level === 0 && <CrewRoom />}
         </>
@@ -297,34 +295,74 @@ export function Floor({ level, children }: FloorProps) {
 }
 
 function Lobby({ mats }: { mats: Mats }) {
-  return (
-    <group>
-      <mesh position={[-6, 0.55, 5]} material={mats.core}>
-        <boxGeometry args={[7, 1.1, 1.2]} />
+  const door = (x: number) => (
+    <group key={x} position={[x, 0, HZ - 0.05]}>
+      <mesh position={[0, 1.1, 0]}>
+        <boxGeometry args={[1.9, 2.2, 0.03]} />
+        <meshStandardMaterial color="#cfe0ea" transparent opacity={0.22} roughness={0.05} metalness={0.3} depthWrite={false} />
       </mesh>
-      <mesh position={[-6, 1.12, 5]}>
-        <boxGeometry args={[7.2, 0.06, 1.4]} />
-        <meshStandardMaterial color="#8a6a4e" roughness={0.6} />
-      </mesh>
-      {[-2, 0, 2].map((x) => (
-        <mesh key={x} position={[x, 1.1, HZ - 0.12]}>
-          <boxGeometry args={[1.6, 2.2, 0.06]} />
-          <meshStandardMaterial color="#14212a" metalness={0.8} roughness={0.2} />
+      {[-0.96, 0.96].map((dx) => (
+        <mesh key={dx} position={[dx, 1.1, 0]} material={mats.metal}>
+          <boxGeometry args={[0.06, 2.2, 0.08]} />
         </mesh>
       ))}
-      <mesh position={[0, 3.05, HZ + 0.14]}>
-        <planeGeometry args={[8, 0.9]} />
+      <mesh position={[0, 2.22, 0]} material={mats.metal}>
+        <boxGeometry args={[2.0, 0.08, 0.08]} />
+      </mesh>
+    </group>
+  );
+  return (
+    <group>
+      {/* entrance doors (glass, open frames — people walk through) */}
+      {[-1.05, 1.05].map(door)}
+      {/* wall logo behind reception, and the facade sign above the entrance */}
+      <mesh position={[-6, 2.1, 0.4]}>
+        <planeGeometry args={[6.4, 1.6]} />
         <meshBasicMaterial map={signTexture()} toneMapped={false} />
       </mesh>
+      <mesh position={[0, 3.05, HZ + 0.14]}>
+        <planeGeometry args={[8, 1.0]} />
+        <meshBasicMaterial map={signTexture()} toneMapped={false} />
+      </mesh>
+      {/* reception desk */}
+      <mesh position={[-6, 0.55, 2.4]} material={mats.core} castShadow>
+        <boxGeometry args={[5.5, 1.1, 1.0]} />
+      </mesh>
+      <mesh position={[-6, 1.12, 2.4]}>
+        <boxGeometry args={[5.7, 0.06, 1.2]} />
+        <meshStandardMaterial color="#8a6a4e" roughness={0.5} />
+      </mesh>
+      {/* lounge: two sofas around a low table */}
+      {[-1, 1].map((s) => (
+        <group key={s} position={[7.5, 0, 5.2 + s * 1.6]} rotation-y={s > 0 ? Math.PI : 0}>
+          <mesh position={[0, 0.25, 0]}>
+            <boxGeometry args={[2.4, 0.5, 0.9]} />
+            <meshStandardMaterial color="#3e6fa8" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.65, -0.4]}>
+            <boxGeometry args={[2.4, 0.5, 0.15]} />
+            <meshStandardMaterial color="#3e6fa8" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[7.5, 0.22, 5.2]}>
+        <boxGeometry args={[1.4, 0.06, 0.8]} />
+        <meshStandardMaterial color="#cdb894" roughness={0.5} />
+      </mesh>
+      {/* walkway stripe from the door to the lift lobby */}
+      <mesh rotation-x={-Math.PI / 2} position={[9, 0.018, 9.4]}>
+        <planeGeometry args={[20, 1.6]} />
+        <meshStandardMaterial color="#bdbfc2" roughness={0.9} />
+      </mesh>
       {[-14, 12].map((x) => (
-        <group key={x} position={[x, 0, 8]}>
+        <group key={x} position={[x, 0, 9]}>
           <mesh position={[0, 0.3, 0]}>
             <cylinderGeometry args={[0.45, 0.35, 0.6, 12]} />
-            <meshStandardMaterial color="#3a464f" />
+            <meshStandardMaterial color="#d9d5cc" />
           </mesh>
           <mesh position={[0, 1.1, 0]}>
-            <icosahedronGeometry args={[0.7, 0]} />
-            <meshStandardMaterial color="#2f6b4f" roughness={0.9} />
+            <icosahedronGeometry args={[0.7, 1]} />
+            <meshStandardMaterial color="#4d8a4f" roughness={0.9} flatShading />
           </mesh>
         </group>
       ))}
@@ -354,6 +392,22 @@ function RoofDeck({ mats }: { mats: Mats }) {
         <boxGeometry args={[CORE.w + 0.3, 0.12, CORE.d + 0.3]} />
         <meshStandardMaterial color="#c3ced6" metalness={0.5} roughness={0.5} />
       </mesh>
+      {/* company sign on posts behind the front parapet (lit at night) */}
+      <group position={[-6.5, 0, HZ - 1.6]}>
+        {[-7, 7].map((x) => (
+          <mesh key={x} position={[x, 0.9, 0]} material={mats.metal}>
+            <boxGeometry args={[0.18, 1.8, 0.18]} />
+          </mesh>
+        ))}
+        <mesh position={[0, 2.3, 0]}>
+          <boxGeometry args={[15.2, 1.9, 0.14]} />
+          <meshStandardMaterial color="#1b2026" roughness={0.5} />
+        </mesh>
+        <mesh position={[0, 2.3, 0.081]}>
+          <planeGeometry args={[14.8, 1.7]} />
+          <meshBasicMaterial map={signTexture()} toneMapped={false} />
+        </mesh>
+      </group>
       {/* walkway markings */}
       <mesh rotation-x={-Math.PI / 2} position={[0, 0.012, 0.2]}>
         <planeGeometry args={[34, 0.5]} />

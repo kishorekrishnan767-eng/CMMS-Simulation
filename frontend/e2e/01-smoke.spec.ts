@@ -3,7 +3,7 @@ import { API, call, watchErrors } from "./helpers";
 
 test("DoD-1 seed building, the golden fan and its sensors are present", async ({ request }) => {
   const tree = await (await request.get(`${API}/api/buildings/TOWER-A/tree`)).json();
-  expect(tree.name).toBe("Tower A");
+  expect(tree.name).toBe("Livewire Digital Solutions");
   expect(tree.floors.map((f: any) => f.level)).toEqual([-1, 0, 1, 2, 3, 4, 5, 6]);
   const ids = tree.floors.flatMap((f: any) => f.assets.map((a: any) => a.id));
   expect(ids).toEqual(expect.arrayContaining(["AHU-02-FAN-01", "AHU-01-FAN-01", "AHU-03-FAN-01", "CHILLER-01", "CHW-PUMP-01", "CHW-PUMP-02", "EXH-FAN-01", "FCU-03-01"]));

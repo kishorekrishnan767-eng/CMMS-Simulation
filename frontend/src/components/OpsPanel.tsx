@@ -29,8 +29,8 @@ function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
     <section className="rounded-md border border-line p-3" data-testid="autopilot-card">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-[13px] font-semibold">Operations autopilot</div>
-          <div className="text-[11.5px] text-muted">Equipment wears at random and the crew works every job through the real workflow.</div>
+          <div className="text-[13px] font-semibold">Automatic operations</div>
+          <div className="text-[11.5px] text-muted">Machines wear at random and the crew handles every job, as in real life. Turn off to do each step yourself.</div>
         </div>
         <button
           role="switch"

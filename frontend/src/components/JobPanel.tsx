@@ -116,6 +116,11 @@ function issueText(a: Anomaly | undefined) {
   return (
     <>
       <p>{a.explanation}</p>
+      {a.projection_hours != null && (
+        <p className="mt-1.5 rounded-md border border-watch/30 bg-watch/10 px-2 py-1 text-[12px]" data-testid="prediction">
+          <b>Prediction:</b> if left alone, vibration is on course to reach the alarm limit in about {Math.max(1, Math.round(a.projection_hours * 60))} min. The work order was raised before that happened.
+        </p>
+      )}
       <div className="mt-1.5 flex flex-wrap gap-1">
         <span className="badge badge-bad">{a.severity}</span>
         <span className="badge badge-muted">z = {a.z.toFixed(1)}σ</span>

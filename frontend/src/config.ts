@@ -1,16 +1,16 @@
 /** Product name lives here (and in backend/app/config.py) — rename in one place. */
-export const APP_NAME = "TwinCMMS";
+export const APP_NAME = "Livewire BMS";
 export const BUILDING_ID = "TOWER-A";
 export const GOLDEN_ASSET = "AHU-02-FAN-01";
 
 export const LAYERS: { n: number; name: string; short: string; blurb: string }[] = [
-  { n: 1, name: "Asset model", short: "Assets", blurb: "Building, floors, assets, sensors" },
-  { n: 2, name: "Telemetry & simulation", short: "Telemetry", blurb: "Seeded physics publishes readings" },
-  { n: 3, name: "Validation", short: "Validate", blurb: "Schema, units, duplicates, quality" },
-  { n: 4, name: "Condition monitoring", short: "Detect", blurb: "Load-adjusted baseline, anomaly state machine" },
-  { n: 5, name: "Risk & decision", short: "Decide", blurb: "Versioned policy, risk score, dedup" },
-  { n: 6, name: "Maintenance workflow", short: "Workflow", blurb: "Work orders, dispatch, inventory" },
-  { n: 7, name: "Verification & learning", short: "Verify", blurb: "Post-repair window, metrics" },
+  { n: 1, name: "Equipment", short: "Equipment", blurb: "Every fan, pump, chiller and AC unit, with its sensors" },
+  { n: 2, name: "Sensor readings", short: "Sensors", blurb: "Vibration, temperature, current and speed, every minute" },
+  { n: 3, name: "Data quality", short: "Clean data", blurb: "Bad readings are rejected, with the reason recorded" },
+  { n: 4, name: "Early warning", short: "Predict", blurb: "Compares each reading with what is normal for that machine" },
+  { n: 5, name: "Risk & decision", short: "Decide", blurb: "Scores the risk and raises one work order" },
+  { n: 6, name: "Maintenance", short: "Fix", blurb: "Approve, dispatch, repair" },
+  { n: 7, name: "Verification", short: "Verify", blurb: "Proves the repair worked and measures the result" },
 ];
 
 export const SIM_SPEEDS = [1, 10, 60, 300, 1800];

@@ -31,6 +31,15 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
       return { pos: v(24, floorY(6) + 13 + explodeOffset(6, explode), 24), target: v(0, floorY(6) + 1.5 + explodeOffset(6, explode), -3), cutaway: null };
     case "plant":
       return { ...basementPose(-1, 0, explode), pos: v(12, floorY(-1) + 19, 24) };
+    case "bms": {
+      // Floor 3 control room seen from the front, floors above lifted off
+      const y = floorY(3) + explodeOffset(3, explode);
+      return { pos: v(-3, y + 7.5, 21), target: v(-11, y + 1.5, 4.5), cutaway: 3 };
+    }
+    case "person":
+    case "entrance":
+      // street view of the front door: where staff arrive from
+      return { pos: v(16, 7.5, 46), target: v(0, 2.2, 22), cutaway: null };
     case "crew":
       // from the lobby, under the ground-floor ceiling, looking through the crew room's glass wall
       return { pos: v(-8.5, floorY(0) + 3.1, 6.2), target: v(-15.2, floorY(0) + 0.9, -7.4), cutaway: 0 };
@@ -56,7 +65,7 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
       };
     }
     default:
-      return { pos: v(58, 40, 66), target: v(0, 9, 0), cutaway: null };
+      return { pos: v(78, 52, 92), target: v(0, 8, 4), cutaway: null };
   }
 }
 
@@ -86,17 +95,27 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
   const goal = useUi((s) => s.cameraGoal);
   const flight = useRef<Flight | null>(null);
   const followId = useRef<string | null>(null);
+  const followOffset = useRef(v(7, 5.5, 9));
   const assetList = useMemo(() => assets ?? [], [assets]);
 
   useEffect(() => {
     if (goal.nonce === 0) return;
     const ui = useUi.getState();
     const pose = presetPose(goal, assetList, ui.explode);
-    ui.set({ cutaway: pose.cutaway });
+    ui.set({ cutaway: pose.cutaway, following: null });
     followId.current = null;
+    followOffset.current = v(7, 5.5, 9);
     if (goal.preset === "follow") {
       const wo = (wos?.items ?? []).filter((w) => w.assigned_technician && w.asset_id === goal.assetId).sort((a, b) => b.id - a.id)[0];
       followId.current = wo?.assigned_technician?.id ?? null;
+      if (followId.current) ui.set({ following: followId.current });
+    }
+    if (goal.preset === "person" && goal.personId && techWorld.has(goal.personId)) {
+      // already at work: trail them straight away
+      ui.set({ following: goal.personId });
+      followId.current = goal.personId;
+      followOffset.current = v(5, 4.6, 7.5);
+      ui.set({ following: goal.personId });
     }
     const c = controls.current;
     if (ui.reducedMotion || !c) {
@@ -123,6 +142,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
     const cancel = () => {
       flight.current = null;
       followId.current = null;
+      useUi.getState().set({ following: null });
     };
     c.addEventListener("start", cancel);
     return () => c.removeEventListener("start", cancel);
@@ -138,7 +158,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
       if (follow) {
         // keep re-aiming at the moving technician while flying in
         f.to.target.copy(follow).add(v(0, 0.2, 0));
-        f.to.pos.copy(follow).add(v(7, 5.5, 9));
+        f.to.pos.copy(follow).add(followOffset.current);
       }
       f.t = Math.min(1, f.t + dt / f.duration);
       const e = ease(f.t);
@@ -149,7 +169,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
     } else if (follow) {
       const k = 3;
       const tgt = follow.clone().add(v(0, 0.2, 0));
-      const pos = follow.clone().add(v(7, 5.5, 9));
+      const pos = follow.clone().add(followOffset.current);
       c.target.set(THREE.MathUtils.damp(c.target.x, tgt.x, k, dt), THREE.MathUtils.damp(c.target.y, tgt.y, k, dt), THREE.MathUtils.damp(c.target.z, tgt.z, k, dt));
       camera.position.set(THREE.MathUtils.damp(camera.position.x, pos.x, k, dt), THREE.MathUtils.damp(camera.position.y, pos.y, k, dt), THREE.MathUtils.damp(camera.position.z, pos.z, k, dt));
     }

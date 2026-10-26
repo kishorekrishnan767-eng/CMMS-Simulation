@@ -6,7 +6,7 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-APP_NAME = "TwinCMMS"
+APP_NAME = "Livewire BMS"
 APP_VERSION = "1.0.0"
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent

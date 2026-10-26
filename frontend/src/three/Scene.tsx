@@ -12,7 +12,9 @@ import { ExhaustFan, SupplyFan } from "./Equipment/FanModels";
 import { Chiller, FanCoilUnit, Pump } from "./Equipment/PlantModels";
 import { LiftShaft } from "./LiftShaft";
 import { FloorBadges, HeatOverlay } from "./Overlays";
-import { City, Ground, QUALITY, SkyAndLight } from "./SceneEnvironment";
+import { City } from "./City";
+import { Ground, QUALITY, SkyAndLight } from "./SceneEnvironment";
+import { Employees } from "./People";
 import { Technicians } from "./Technicians";
 import { WorkOrderPins } from "./WorkOrderPins";
 
@@ -99,6 +101,7 @@ function Content({ orbit, interactive }: { orbit: boolean; interactive: boolean 
       <FloorBadges />
       <WorkOrderPins />
       <Technicians />
+      <Employees />
       <CameraRig orbit={orbit} />
       {interactive && <FpsMonitor />}
       {q.bloom && (
@@ -123,8 +126,8 @@ export default function TwinScene({ orbit = false, interactive = true }: { orbit
       key={quality === "low" ? "low" : "std"}
       shadows={q.shadow > 0}
       dpr={dpr}
-      camera={{ position: [58, 40, 66], fov: 42, near: 0.5, far: 1200 }}
-      gl={{ antialias: quality !== "low", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+      camera={{ position: [78, 52, 92], fov: 42, near: 0.5, far: 1200 }}
+      gl={{ antialias: quality === "high", powerPreference: "high-performance", toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       onPointerMissed={() => useUi.getState().selectAsset(null, false)}
       data-testid="twin-canvas"
     >

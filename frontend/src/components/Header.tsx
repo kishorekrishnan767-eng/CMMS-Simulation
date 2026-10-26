@@ -103,16 +103,12 @@ function RoleSwitcher() {
 }
 
 const NAV: [string, string][] = [
-  ["/sim", "Live twin"], ["/pipeline", "Pipeline"], ["/cmms", "Work orders"], ["/dispatch", "Technicians"], ["/inventory", "Inventory"],
-  ["/analytics", "Analytics"], ["/audit", "Audit"], ["/control", "Control"], ["/about", "About"],
+  ["/sim", "Live building"], ["/cmms", "Work orders"], ["/dispatch", "Crew"], ["/inventory", "Spare parts"], ["/analytics", "Results"], ["/control", "Simulation"],
 ];
 
 export default function Header() {
   const connected = useLive((s) => s.connected);
   const theme = useUi((s) => s.theme);
-  const reduced = useUi((s) => s.reducedMotion);
-  const fps = useUi((s) => s.fps);
-  const quality = useUi((s) => s.quality);
   const [menu, setMenu] = useState(false);
   return (
     <header className="fixed inset-x-0 top-0 z-40 border-b border-line bg-panel" role="banner">
@@ -136,16 +132,13 @@ export default function Header() {
             <SimClock />
             <span className="text-[10px] text-muted">
               <i className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-bad"}`} />
-              {connected ? "live" : "offline"}{fps ? ` · ${fps} fps · ${quality}` : ""}
+              {connected ? "connected" : "offline"}
             </span>
           </div>
           <SimControls />
           <RoleSwitcher />
           <button className="btn btn-sm hidden sm:inline-flex" aria-label="Toggle light or dark theme" onClick={() => useUi.getState().set({ theme: theme === "dark" ? "light" : "dark" })}>
             {theme === "dark" ? "☀" : "☾"}
-          </button>
-          <button className="btn btn-sm hidden sm:inline-flex" aria-pressed={reduced} title="Reduce motion" onClick={() => useUi.getState().set({ reducedMotion: !reduced })}>
-            ⇆
           </button>
           <button className="btn btn-sm xl:hidden" onClick={() => setMenu((m) => !m)} aria-label="Menu" aria-expanded={menu}>
             ☰

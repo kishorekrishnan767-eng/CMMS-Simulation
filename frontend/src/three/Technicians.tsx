@@ -7,6 +7,7 @@ import type { Asset, ProcedureStep, Technician, WorkOrderSummary } from "../api/
 import { simNowMs } from "../store/live";
 import { useUi } from "../store/ui";
 import { explodeOffset, floorLabel, floorY } from "./constants";
+import { Person, type Joints } from "./Person";
 import { buildPath, techPose, type Pose } from "./techPath";
 
 /** World positions of technicians, refreshed every frame (used by the follow camera). */
@@ -19,24 +20,11 @@ const TROUSERS = "#2d3640";
 const SHIRT = "#4a5560";
 const HAT = "#f4f4f2";
 const BOOT = "#1d2126";
-const REFLECT = "#dfe3e6";
 
 /** How long (wall seconds) the dispatch message stays above a technician after a new assignment. */
 const MESSAGE_SECONDS = 7;
 
-interface Rig {
-  root: THREE.Group;
-  body: THREE.Group;
-  torso: THREE.Group;
-  head: THREE.Group;
-  hipL: THREE.Group;
-  hipR: THREE.Group;
-  kneeL: THREE.Group;
-  kneeR: THREE.Group;
-  armL: THREE.Group;
-  armR: THREE.Group;
-  elbowL: THREE.Group;
-  elbowR: THREE.Group;
+interface Rig extends Joints {
   wrench: THREE.Object3D;
   tablet: THREE.Object3D;
   boxHand: THREE.Object3D;
@@ -58,9 +46,10 @@ const STEP_STYLE: Record<string, { crouch: number; lean: number; prop: "wrench" 
 const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technician; wo: WorkOrderSummary | null; asset: Asset | null; steps: ProcedureStep[] | null }) {
   const rig = useRef<Partial<Rig>>({});
   const r = rig.current;
-  const set = <K extends keyof Rig>(k: K) => (o: Rig[K] | null) => {
+  const mount = <K extends "wrench" | "tablet" | "boxHand" | "boxFloor">(k: K) => (o: THREE.Object3D | null) => {
     if (o) r[k] = o;
   };
+  const look = useMemo(() => ({ chest: tech.color, sleeve: SHIRT, pants: TROUSERS, skin: SKIN, boots: BOOT, hat: HAT, stripes: true }), [tech.color]);
   const label = useRef<HTMLDivElement>(null);
   const msg = useRef<HTMLDivElement>(null);
   const yaw = useRef(0);
@@ -71,7 +60,6 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
   const gait = useRef(0);
   const last = useMemo(() => new THREE.Vector3(), []);
   const visible = useUi((s) => s.showTechnicians);
-  const vest = tech.color;
   const [message, setMessage] = useState<string | null>(null);
 
   // A new assignment is "radioed" to the technician: show it above their head for a few seconds.
@@ -115,7 +103,9 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
     const shown = visible && (ui.cutaway === null || p.level <= ui.cutaway + 0.01) && !(p.phase === "idle" && !tech.on_shift);
     g.visible = shown;
     const tag = label.current?.parentElement;
-    if (tag && tag.style.display !== (shown ? "" : "none")) tag.style.display = shown ? "" : "none";
+    const near = state.camera.position.distanceTo(g.position) < 60 || p.phase === "walking" || p.phase === "working";
+    const showTag = shown && near;
+    if (tag && tag.style.display !== (showTag ? "" : "none")) tag.style.display = showTag ? "" : "none";
 
     const t = state.clock.elapsedTime;
     const moving = (p.phase === "walking" || p.phase === "returning") && !p.inLift && speed > 0.05;
@@ -187,120 +177,65 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
     }
   });
 
-  const limb = (len: number, rad: number, color: string) => (
-    <mesh position={[0, -len / 2, 0]} castShadow>
-      <capsuleGeometry args={[rad, len - rad * 2, 4, 10]} />
-      <meshStandardMaterial color={color} roughness={0.8} />
-    </mesh>
-  );
-
   return (
-    <group ref={set("root")}>
-      <group ref={set("body")}>
-        {/* legs */}
-        {(["hipL", "hipR"] as const).map((hip, i) => (
-          <group key={hip} ref={set(hip)} position={[i ? 0.11 : -0.11, 0.92, 0]}>
-            {limb(0.46, 0.085, TROUSERS)}
-            <group ref={set(i ? "kneeR" : "kneeL")} position={[0, -0.44, 0]}>
-              {limb(0.44, 0.075, TROUSERS)}
-              <mesh position={[0, -0.44, 0.05]} castShadow>
-                <boxGeometry args={[0.13, 0.09, 0.27]} />
-                <meshStandardMaterial color={BOOT} roughness={0.9} />
+    <group
+      onClick={(e) => {
+        e.stopPropagation();
+        const ui = useUi.getState();
+        if (wo && asset && wo.status !== "CLOSED") ui.selectAsset(wo.asset_id);
+        else ui.fly({ preset: "crew" });
+      }}
+      onPointerOver={() => (document.body.style.cursor = "pointer")}
+      onPointerOut={() => (document.body.style.cursor = "")}
+    >
+      <Person
+        look={look}
+        onReady={(j) => Object.assign(r, j)}
+        handR={
+          <group ref={mount("wrench")} position={[0, -0.02, 0.08]} rotation-x={Math.PI / 2} visible={false}>
+            <mesh>
+              <boxGeometry args={[0.035, 0.26, 0.02]} />
+              <meshStandardMaterial color="#a8b0b8" metalness={0.85} roughness={0.3} />
+            </mesh>
+            <mesh position={[0, 0.14, 0]}>
+              <torusGeometry args={[0.035, 0.012, 6, 12, Math.PI * 1.5]} />
+              <meshStandardMaterial color="#a8b0b8" metalness={0.85} roughness={0.3} />
+            </mesh>
+          </group>
+        }
+        handL={
+          <>
+            <group ref={mount("tablet")} position={[0.06, 0, 0.1]} rotation-x={-0.9} visible={false}>
+              <mesh>
+                <boxGeometry args={[0.2, 0.014, 0.27]} />
+                <meshStandardMaterial color="#22272d" roughness={0.5} />
+              </mesh>
+              <mesh position={[0, 0.008, 0]}>
+                <planeGeometry args={[0.17, 0.23]} />
+                <meshBasicMaterial color="#9cc2ef" side={THREE.DoubleSide} />
               </mesh>
             </group>
-          </group>
-        ))}
-        {/* torso pivots at the hips */}
-        <group ref={set("torso")} position={[0, 0.92, 0]}>
-          <mesh position={[0, 0.06, 0]} castShadow>
-            <boxGeometry args={[0.34, 0.16, 0.2]} />
-            <meshStandardMaterial color={TROUSERS} roughness={0.85} />
-          </mesh>
-          <mesh position={[0, 0.34, 0]} castShadow>
-            <capsuleGeometry args={[0.19, 0.3, 4, 12]} />
-            <meshStandardMaterial color={vest} roughness={0.65} />
-          </mesh>
-          {[0.26, 0.42].map((h) => (
-            <mesh key={h} position={[0, h, 0]}>
-              <cylinderGeometry args={[0.197, 0.197, 0.035, 16, 1, true]} />
-              <meshStandardMaterial color={REFLECT} roughness={0.3} metalness={0.2} emissive={REFLECT} emissiveIntensity={0.15} />
-            </mesh>
-          ))}
-          <group ref={set("head")} position={[0, 0.66, 0]}>
-            <mesh position={[0, 0.02, 0]}>
-              <cylinderGeometry args={[0.055, 0.06, 0.08, 10]} />
-              <meshStandardMaterial color={SKIN} roughness={0.8} />
-            </mesh>
-            <mesh position={[0, 0.15, 0]} castShadow>
-              <sphereGeometry args={[0.12, 16, 12]} />
-              <meshStandardMaterial color={SKIN} roughness={0.8} />
-            </mesh>
-            <mesh position={[0, 0.215, 0]} castShadow>
-              <sphereGeometry args={[0.138, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
-              <meshStandardMaterial color={HAT} roughness={0.4} />
-            </mesh>
-            <mesh position={[0, 0.215, 0.06]} rotation-x={0.08}>
-              <cylinderGeometry args={[0.16, 0.16, 0.018, 18, 1, false, -Math.PI / 2, Math.PI]} />
-              <meshStandardMaterial color={HAT} roughness={0.4} />
-            </mesh>
-          </group>
-          {/* arms: shoulder → elbow → hand */}
-          {(["armL", "armR"] as const).map((arm, i) => (
-            <group key={arm} ref={set(arm)} position={[i ? 0.25 : -0.25, 0.5, 0]}>
-              {limb(0.3, 0.062, SHIRT)}
-              <group ref={set(i ? "elbowR" : "elbowL")} position={[0, -0.28, 0]}>
-                {limb(0.28, 0.05, SHIRT)}
-                <mesh position={[0, -0.29, 0]}>
-                  <sphereGeometry args={[0.05, 10, 8]} />
-                  <meshStandardMaterial color={SKIN} roughness={0.8} />
-                </mesh>
-                {i ? (
-                  <group ref={set("wrench")} position={[0, -0.32, 0.08]} rotation-x={Math.PI / 2}>
-                    <mesh>
-                      <boxGeometry args={[0.035, 0.26, 0.02]} />
-                      <meshStandardMaterial color="#a8b0b8" metalness={0.85} roughness={0.3} />
-                    </mesh>
-                    <mesh position={[0, 0.14, 0]}>
-                      <torusGeometry args={[0.035, 0.012, 6, 12, Math.PI * 1.5]} />
-                      <meshStandardMaterial color="#a8b0b8" metalness={0.85} roughness={0.3} />
-                    </mesh>
-                  </group>
-                ) : (
-                  <>
-                    <group ref={set("tablet")} position={[0.06, -0.3, 0.1]} rotation-x={-0.9}>
-                      <mesh>
-                        <boxGeometry args={[0.2, 0.014, 0.27]} />
-                        <meshStandardMaterial color="#22272d" roughness={0.5} />
-                      </mesh>
-                      <mesh position={[0, 0.008, 0]}>
-                        <planeGeometry args={[0.17, 0.23]} />
-                        <meshBasicMaterial color="#9cc2ef" side={THREE.DoubleSide} />
-                      </mesh>
-                    </group>
-                    <group ref={set("boxHand")} position={[0, -0.42, 0]}>
-                      <Toolbox />
-                    </group>
-                  </>
-                )}
-              </group>
+            <group ref={mount("boxHand")} position={[0, -0.12, 0]} visible={false}>
+              <Toolbox />
             </group>
-          ))}
+          </>
+        }
+      >
+        <group ref={mount("boxFloor")} position={[0.55, 0.1, 0.15]} rotation-y={0.4} visible={false}>
+          <Toolbox />
         </group>
-      </group>
-      <group ref={set("boxFloor")} position={[0.55, 0.1, 0.15]} rotation-y={0.4}>
-        <Toolbox />
-      </group>
-      <Html position={[0, 2.25, 0]} center zIndexRange={[18, 0]} style={{ pointerEvents: "none" }}>
-        <div className="tech-tag" data-testid={`tech-${tech.id}`} style={{ ["--vest" as string]: vest }}>
-          {message && (
-            <div ref={msg} className="tech-msg" data-testid={`tech-msg-${tech.id}`}>
-              <b>Dispatch → {tech.name.split(" ")[0]}</b>
-              {message}
-            </div>
-          )}
-          <div ref={label} className="tech-tag-text" data-phase="idle" />
-        </div>
-      </Html>
+        <Html position={[0, 2.25, 0]} center zIndexRange={[18, 0]} style={{ pointerEvents: "none" }}>
+          <div className="tech-tag" data-testid={`tech-${tech.id}`} style={{ ["--vest" as string]: tech.color }}>
+            {message && (
+              <div ref={msg} className="tech-msg" data-testid={`tech-msg-${tech.id}`}>
+                <b>Dispatch → {tech.name.split(" ")[0]}</b>
+                {message}
+              </div>
+            )}
+            <div ref={label} className="tech-tag-text" data-phase="idle" />
+          </div>
+        </Html>
+      </Person>
     </group>
   );
 });

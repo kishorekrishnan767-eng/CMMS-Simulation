@@ -30,9 +30,9 @@ function FlowNode({ n }: { n: number }) {
 export default function Landing() {
   // the hero twin is a backdrop: no machine / pin / technician labels over the headline
   useEffect(() => {
-    const { showLabels, showPins, showTechnicians } = useUi.getState();
-    useUi.setState({ showLabels: false, showPins: false, showTechnicians: false });
-    return () => useUi.setState({ showLabels, showPins, showTechnicians });
+    const { showLabels, showPins } = useUi.getState();
+    useUi.setState({ showLabels: false, showPins: false });
+    return () => useUi.setState({ showLabels, showPins });
   }, []);
   return (
     <div className="pt-14">
@@ -48,25 +48,26 @@ export default function Landing() {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-bg/90 via-bg/40 to-transparent" />
         <div className="relative z-10 mx-auto flex h-full max-w-[1400px] items-center px-5 sm:px-8">
           <div className="pointer-events-auto max-w-xl">
-            <span className="badge badge-watch mb-3">Simulated data · demo thresholds</span>
+            <span className="badge badge-watch mb-3">Simulated building · demo data</span>
             <h1 className="text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-              From sensor data to a <span className="text-accent">verified repair</span>.
+              Find the problem <span className="text-accent">before it breaks</span>.
             </h1>
             <p className="mt-4 text-base text-muted">
-              {APP_NAME} is a fully working CMMS simulation on a live 3D digital twin of an office tower. Watch a fan bearing degrade, the system detect it and explain why, a work order get approved, a technician walk to the roof, repair it — and an independent verifier confirm recovery. Every number comes from a real database through a real backend.
+              {APP_NAME} is a live 3D model of the Livewire Digital Solutions building: every fan, pump, chiller and AC unit, and the people who work and maintain it.
+              Watch a machine start to wear, the system warn early, a supervisor approve the job, a technician repair it and an independent check prove it worked.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/sim" className="btn btn-primary px-5 py-2.5 text-base" data-testid="launch-sim">Launch live simulation</Link>
-              <Link to="/sim?demo=1" className="btn px-5 py-2.5 text-base" data-testid="launch-demo">▶ Watch guided demo</Link>
+              <Link to="/sim" className="btn btn-primary px-5 py-2.5 text-base" data-testid="launch-sim">Open the live building</Link>
+              <Link to="/sim?demo=1" className="btn px-5 py-2.5 text-base" data-testid="launch-demo">▶ Watch the demo</Link>
             </div>
-            <p className="mt-4 text-xs text-muted">No account needed — you start as an Operator and can switch roles from the header.</p>
+            <p className="mt-4 text-xs text-muted">No sign-in needed. You start as an operator and can switch roles from the top bar.</p>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-[1400px] px-5 py-12 sm:px-8" aria-labelledby="layers-h">
-        <h2 id="layers-h" className="text-2xl font-semibold tracking-tight">Seven layers, one incident</h2>
-        <p className="mt-1 max-w-3xl text-sm text-muted">Each node lights up when an event passes through it; the counters are live from the backend.</p>
+        <h2 id="layers-h" className="text-2xl font-semibold tracking-tight">From a sensor reading to a verified repair</h2>
+        <p className="mt-1 max-w-3xl text-sm text-muted">Seven steps, each one lights up when something passes through it. The counters are live.</p>
         <ol className="mt-5 flex flex-col gap-3 lg:flex-row" data-testid="flow">
           {LAYERS.map((l) => <FlowNode key={l.n} n={l.n} />)}
         </ol>
@@ -74,23 +75,21 @@ export default function Landing() {
 
       <section className="mx-auto grid max-w-[1400px] gap-4 px-5 pb-16 sm:px-8 md:grid-cols-2">
         <div className="card p-5">
-          <h3 className="text-lg font-semibold">What this is</h3>
+          <h3 className="text-lg font-semibold">What you get</h3>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-            <li>A complete maintenance loop on a procedural 3D building, driven by a seeded simulator.</li>
-            <li>Transparent detection (baseline, z-score, slope, persistence) with evidence and a plain-language explanation.</li>
-            <li>A work-order state machine with roles enforced in the backend, explainable dispatch, and a stock ledger.</li>
-            <li>Independent verification and metrics computed from stored data.</li>
+            <li>An early warning when a machine starts to drift from its normal behaviour, with the evidence and the time left.</li>
+            <li>One work order per problem, approved by a supervisor, assigned to the right technician, with parts reserved.</li>
+            <li>An independent check that the repair worked, and the cost and response time of every job.</li>
+            <li>Everyone sees the same picture: the control room, the crew and the machines.</li>
           </ul>
         </div>
         <div className="card p-5">
-          <h3 className="text-lg font-semibold">What it isn’t</h3>
+          <h3 className="text-lg font-semibold">Good to know</h3>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">
-            <li>Not connected to real equipment — all sensor data is simulated.</li>
-            <li>Not a diagnosis: an anomaly means “inspection recommended”, never “failed”.</li>
-            <li>Thresholds are demo values, configurable per asset — not taken from any standard.</li>
-            <li>Not evidence of real-world detection accuracy.</li>
+            <li>All sensor data, people and schedules here are simulated; nothing is connected to real equipment.</li>
+            <li>A warning means "inspect this", never "this has failed".</li>
+            <li>Thresholds are demo values and can be set per machine.</li>
           </ul>
-          <Link to="/about" className="mt-3 inline-block text-sm text-accent hover:underline">Architecture & limitations →</Link>
         </div>
       </section>
     </div>

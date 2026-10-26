@@ -72,6 +72,7 @@ class Autopilot:
         self._waiting: dict[int, str] = {}
         self._orders: dict[str, datetime] = {}
         self._tech_users: dict[str, tuple[str, str]] = {}
+        self._names: dict[str, str] = {}
         self._now: datetime | None = None
         self._lock = threading.RLock()
         self._thread: threading.Thread | None = None
@@ -130,6 +131,8 @@ class Autopilot:
             self._now = now
             key = (int(sim["seed"]), int(sim["run_id"]))
             if key != self._run_key:  # first tick, or the world was reset to seed
+                if self._run_key is not None:
+                    self.log.clear()  # a reset wipes the activity history too
                 self._run_key = key
                 self._rng = np.random.default_rng((key[0], key[1], 7))
                 self._next_fault, self._plans, self._waiting, self._orders = None, {}, {}, {}
@@ -148,6 +151,7 @@ class Autopilot:
         if self._api is None:
             self._api = Api()
             for u in self._api.get("/api/auth/demo-users"):
+                self._names[u["username"]] = u["display_name"]
                 if u["technician_id"]:
                     self._tech_users[u["technician_id"]] = (u["username"], u["display_name"])
         return self._api
@@ -230,7 +234,7 @@ class Autopilot:
         if wo.get("proposed_priority"):
             self._post("supervisor", f"/api/work-orders/{wid}/acknowledge-escalation",
                        {"accept": True, "note": "Escalation accepted after reviewing the new evidence"})
-            self._say(wo, "Sofia Supervisor", "SUPERVISOR", f"Accepted escalation to {wo['proposed_priority']}", at=now)
+            self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR", f"Accepted escalation to {wo['proposed_priority']}", at=now)
             return
 
         if status == "DRAFT":
@@ -239,7 +243,7 @@ class Autopilot:
                 return self._wait(wo, f"Supervisor reviewing the evidence (decision due {_iso(due)[11:16]})")
             self._post("supervisor", f"/api/work-orders/{wid}/approve",
                        {"note": "Evidence reviewed — approved for inspection and repair"})
-            self._say(wo, "Sofia Supervisor", "SUPERVISOR", f"Approved {wo['number']} ({wo['priority']})", at=now)
+            self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR", f"Approved {wo['number']} ({wo['priority']})", at=now)
 
         elif status == "OPEN":
             due = _t(wo["approved_at"] or wo["updated_at"]) + timedelta(minutes=plan["dispatch"])
@@ -254,7 +258,7 @@ class Autopilot:
             best = next((c for c in eligible if techs.get(c["technician_id"], {}).get("status") == "AVAILABLE"), eligible[0])
             res = self._post("supervisor", f"/api/work-orders/{wid}/assign", {"technician_id": best["technician_id"]})
             parts = ", ".join(f"{p['sku']}×{p['planned']}" for p in res.get("parts", [])) or "none"
-            self._say(wo, "Sofia Supervisor", "SUPERVISOR",
+            self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR",
                       f"Dispatched {best['name']} (score {best['score']:.2f}, ETA {best['travel_minutes']} min). "
                       f"Parts reserved: {parts}", at=now)
 
@@ -312,7 +316,7 @@ class Autopilot:
                 return self._wait(wo, f"Verifier waiting for the post-repair window ({v['samples']}/{v['samples_required']} samples)")
             res = self._post("verifier", f"/api/work-orders/{wid}/verify", {"outcome": "auto", "note": "Layer 7 criteria evaluated"})
             outcome = "passed" if res["status"] == "VERIFIED" else "FAILED — rework required"
-            self._say(wo, "Vera Verifier", "VERIFIER", f"Verification {outcome}", "action" if res["status"] == "VERIFIED" else "warn", now)
+            self._say(wo, self._names.get("verifier", "Verifier"), "VERIFIER", f"Verification {outcome}", "action" if res["status"] == "VERIFIED" else "warn", now)
 
         elif status == "REWORK_REQUIRED":
             due = _t(wo["updated_at"]) + timedelta(minutes=3)
@@ -332,7 +336,7 @@ class Autopilot:
             if now < due:
                 return self._wait(wo, "Supervisor reviewing documentation before closure")
             self._post("supervisor", f"/api/work-orders/{wid}/close", {"checklist": CLOSURE, "note": "Closed after verification"})
-            self._say(wo, "Sofia Supervisor", "SUPERVISOR", f"Closed {wo['number']}", at=now)
+            self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR", f"Closed {wo['number']}", at=now)
 
     def _asset_type(self, asset_id: str) -> str:
         return str(self.api().get(f"/api/assets/{asset_id}")["asset_type"])
@@ -344,7 +348,7 @@ class Autopilot:
             self._orders[sku] = now + timedelta(minutes=float(self._rng.uniform(30, 60)))
         if new:
             eta = max(self._orders[s] for s in new)
-            self._say(wo, "Sofia Supervisor", "SUPERVISOR",
+            self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR",
                       f"Purchase order raised for {', '.join(new)} — delivery expected {_iso(eta)[11:16]}", "warn", now)
         else:
             self._wait(wo, "Waiting for parts delivery")

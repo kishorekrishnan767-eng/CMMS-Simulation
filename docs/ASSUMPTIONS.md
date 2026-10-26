@@ -77,3 +77,18 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
 26. **Job procedures** (`cmms/procedures.py`) are demo step lists with demo durations per asset type. The
     UI shows the current step from elapsed sim time since work began; the autopilot signs the job off when
     the planned minutes have elapsed and records the step keys as the inspection checklist.
+27. **The company and the city.** The seeded building is "Livewire Digital Solutions" (internal id `TOWER-A`
+    kept stable). Floors: B1 plant, G lobby + crew room, F1 development, F2 development + server room,
+    F3 BMS control room, F4 project teams, F5 management, roof plant deck. Five office / server-room AC
+    units (`FCU-01-01`, `FCU-02-01`, `CRAC-02-01`, `FCU-04-01`, `FCU-05-01`) join the original eight assets
+    (13 in total). Around the campus the 3D scene draws a procedural city (street grid, houses, mid-rise
+    offices, a park, traffic, pedestrians, clouds, aircraft); it is ambience driven by wall-clock time, while
+    window / street lighting, sun and moon follow the simulation clock.
+28. **Employees are simulated people.** Prasad, Vaseem, Yasir, Kishore, Guru and Mano (`three/office.ts`)
+    follow a weekday schedule derived from the sim clock only (no stored state): arrive from the street,
+    take the glass lift, sit at their desk, leave. Kishore is the seeded `supervisor` user ("Kishore") and
+    works at a BMS console; the supervisor actions of the autopilot and the guided demo are his. Other desks
+    are filled by anonymous staff who come and go with the office occupancy curve. Nothing about the
+    people is stored or sent to the backend.
+29. **Performance trade-off.** City geometry uses cheap Lambert shading; MSAA stays High-only. Measured
+    Medium frame rate is recorded by the DoD-17 test in `docs/PERFORMANCE.md`.

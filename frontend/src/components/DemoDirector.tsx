@@ -5,7 +5,7 @@ import { GOLDEN_ASSET } from "../config";
 import { useUi } from "../store/ui";
 import { useAct } from "./ui";
 
-interface DemoStep { id: number; layer: number; title: string; narration: string; camera: { view: string; asset?: string; close?: boolean } }
+interface DemoStep { id: number; layer: number; short: string; title: string; narration: string; camera: { view: string; asset?: string; close?: boolean } }
 interface DemoState {
   step: number; total: number; busy: boolean; autoplay: boolean; error: string | null; steps: DemoStep[];
   current: DemoStep | null; results: Record<string, any>; log: { step: number; text: string; kind?: string }[];
@@ -13,19 +13,33 @@ interface DemoState {
 
 function applyCamera(cam: DemoStep["camera"]) {
   const ui = useUi.getState();
-  if (cam.view === "overview") {
-    ui.selectAsset(null, false);
-    ui.fly({ preset: "overview" });
-  } else if (cam.view === "follow") {
-    ui.selectAsset(cam.asset ?? GOLDEN_ASSET, false);
-    ui.fly({ preset: "follow", assetId: cam.asset ?? GOLDEN_ASSET });
-  } else {
-    ui.selectAsset(cam.asset ?? GOLDEN_ASSET, false);
-    ui.fly({ preset: "asset", assetId: cam.asset ?? GOLDEN_ASSET, close: cam.close });
+  const asset = cam.asset ?? GOLDEN_ASSET;
+  switch (cam.view) {
+    case "overview":
+      ui.selectAsset(null, false);
+      ui.fly({ preset: "overview" });
+      break;
+    case "bms":
+      ui.selectAsset(null, false);
+      ui.fly({ preset: "bms" });
+      break;
+    case "crew":
+      ui.selectAsset(null, false);
+      ui.fly({ preset: "crew" });
+      break;
+    case "follow":
+      ui.selectAsset(asset, false);
+      ui.set({ rightTab: "job" });
+      ui.fly({ preset: "follow", assetId: asset });
+      break;
+    default:
+      ui.selectAsset(asset, false);
+      ui.set({ rightTab: "job" });
+      ui.fly({ preset: "asset", assetId: asset, close: cam.close });
   }
 }
 
-/** Guided Demo: narration + camera moves on top of the REAL backend (the server-side director only calls the public API). */
+/** Guided demo: plain-language narration and camera moves on top of the REAL backend. */
 export default function DemoDirector({ onExit }: { onExit: () => void }) {
   const qc = useQueryClient();
   const { run, busy: acting } = useAct();
@@ -45,11 +59,10 @@ export default function DemoDirector({ onExit }: { onExit: () => void }) {
   const nextMeta = data.steps[data.step];
   const finished = data.step >= data.total && !data.busy;
 
-  const start = async () => {
+  const reset = async () => {
     setPreparing(true);
     await run(() => api.post("/api/demo/reset"));
     setPreparing(false);
-    await next();
   };
   const next = async () => {
     const meta = data.steps[Math.min(data.step, data.total - 1)];
@@ -57,12 +70,12 @@ export default function DemoDirector({ onExit }: { onExit: () => void }) {
     await run(() => api.post("/api/demo/step"));
     qc.invalidateQueries({ queryKey: ["demo"] });
   };
-  const autoplay = async () => {
-    if (data.step === 0) {
-      setPreparing(true);
-      await run(() => api.post("/api/demo/reset"));
-      setPreparing(false);
-    }
+  const start = async () => {
+    await reset();
+    await next();
+  };
+  const play = async () => {
+    if (data.step === 0) await reset();
     await run(() => api.post("/api/demo/autoplay"));
     qc.invalidateQueries({ queryKey: ["demo"] });
   };
@@ -71,42 +84,46 @@ export default function DemoDirector({ onExit }: { onExit: () => void }) {
   };
 
   const cur = data.current;
-  const lastLog = data.log.slice(-4);
+  const live = data.log.length ? data.log[data.log.length - 1].text : null;
   return (
-    <div className="glass pointer-events-auto w-[min(94vw,560px)] rounded-md border border-accent/50 p-4 shadow-lg" data-testid="demo-director" role="region" aria-label="Guided demo">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="badge badge-ok">Guided demo · {data.step}/{data.total}</span>
-        <button className="btn btn-sm" onClick={() => { void stop(); onExit(); }} data-testid="demo-exit">Exit</button>
-      </div>
-      <div className="mb-2 flex gap-0.5" aria-hidden>
+    <div className="glass fade-in pointer-events-auto w-[min(94vw,640px)] rounded-md border border-line" data-testid="demo-director" role="region" aria-label="Guided demo">
+      <div className="flex gap-px overflow-hidden rounded-t-md" aria-hidden>
         {data.steps.map((s) => (
-          <i key={s.id} className={`h-1 flex-1 rounded ${s.id <= data.step ? "bg-accent" : "bg-line"}`} />
+          <i key={s.id} title={s.short} className={`h-1 flex-1 ${s.id < data.step ? "bg-ok" : s.id === data.step ? "bg-accent" : "bg-line"}`} />
         ))}
       </div>
-      {cur ? (
-        <>
-          <div className="text-base font-semibold" data-testid="demo-title">{cur.id}. {cur.title} <span className="badge badge-muted ml-1">Layer {cur.layer}</span></div>
-          <p className="mt-1 text-sm text-muted" data-testid="demo-narration">{cur.narration}</p>
-        </>
-      ) : (
-        <>
-          <div className="text-base font-semibold">Follow one incident through all seven layers</div>
-          <p className="mt-1 text-sm text-muted">A fan bearing slowly degrades in the simulation. The system detects it, scores the risk, opens a work order, a supervisor approves, a technician walks to the roof, repairs it, and a verifier confirms recovery. Every step calls the real backend — including actions it will deny.</p>
-        </>
-      )}
-      {lastLog.length > 0 && (
-        <ul className="mt-2 space-y-0.5 rounded border border-line bg-bg/60 p-2 text-[11px] text-muted" data-testid="demo-log">
-          {lastLog.map((l, i) => <li key={i}>› {l.text}</li>)}
-        </ul>
-      )}
-      {data.error && <p className="mt-2 text-xs text-bad" role="alert">{data.error}</p>}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {data.step === 0 && !working && <button className="btn btn-primary" onClick={start} data-testid="demo-start">Start (reset to seed)</button>}
-        {data.step > 0 && !finished && <button className="btn btn-primary" disabled={working} onClick={next} data-testid="demo-next">{working ? "Running…" : `Next: ${nextMeta?.title ?? ""}`}</button>}
-        {!working && !finished && <button className="btn" onClick={autoplay} data-testid="demo-autoplay">Autoplay</button>}
-        {data.autoplay && <button className="btn" onClick={stop}>Pause autoplay</button>}
-        {working && <span className="text-xs text-muted" role="status">{preparing ? "Resetting and backfilling 6 h of healthy history…" : "Running against the real backend…"}</span>}
-        {finished && <button className="btn btn-primary" onClick={onExit} data-testid="demo-finish">Finish — explore the twin</button>}
+      <div className="p-4">
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
+            {data.step === 0 ? "Guided demo" : `Step ${data.step} of ${data.total} · ${cur?.short ?? ""}`}
+          </span>
+          <button className="btn btn-sm" onClick={() => { void stop(); onExit(); }} data-testid="demo-exit">Close</button>
+        </div>
+        {cur ? (
+          <>
+            <div className="text-[17px] font-semibold leading-snug" data-testid="demo-title">{cur.title}</div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted" data-testid="demo-narration">{cur.narration}</p>
+          </>
+        ) : (
+          <>
+            <div className="text-[17px] font-semibold leading-snug">See how a problem is found, fixed and proved, before it becomes a breakdown</div>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
+              In about four minutes you will watch a fan bearing start to wear on the roof of the Livewire Digital Solutions building. The system spots it early,
+              raises one work order, a supervisor approves it, a technician walks to the fan and repairs it, and an independent check proves it worked.
+            </p>
+          </>
+        )}
+        {live && data.step > 0 && <div className="mt-2 truncate text-[12px] text-muted" data-testid="demo-log">› {live}</div>}
+        {data.error && <p className="mt-2 text-xs text-bad" role="alert">{data.error}</p>}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {data.step === 0 && !working && <button className="btn btn-primary" onClick={play} data-testid="demo-autoplay">▶ Play the whole demo</button>}
+          {data.step === 0 && !working && <button className="btn" onClick={start} data-testid="demo-start">Go step by step</button>}
+          {data.step > 0 && !finished && !data.autoplay && <button className="btn btn-primary" disabled={working} onClick={next} data-testid="demo-next">{working ? "Working…" : `Next: ${nextMeta?.short ?? ""}`}</button>}
+          {data.step > 0 && !working && !finished && !data.autoplay && <button className="btn" onClick={play} data-testid="demo-autoplay">Play the rest</button>}
+          {data.autoplay && <button className="btn" onClick={stop}>Pause</button>}
+          {working && <span className="text-xs text-muted" role="status">{preparing ? "Preparing the building…" : data.autoplay ? "Playing…" : "Running…"}</span>}
+          {finished && <button className="btn btn-primary" onClick={onExit} data-testid="demo-finish">Finish and explore the building</button>}
+        </div>
       </div>
     </div>
   );
