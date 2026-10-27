@@ -75,18 +75,20 @@ export interface Employee {
   leave: number;
   /** Where on the street they arrive from: −1 west, +1 east. */
   from: -1 | 1;
+  collaboration?: { partnerId: string; activity: string; start: number; end: number };
   look: { chest: string; sleeve: string; pants: string; skin: string; hair: string; boots: string; lanyard: string };
 }
 
-const emp = (id: string, name: string, role: string, team: string, seat: Workstation, arrive: number, leave: number, from: -1 | 1, skin: string, hair: string, shirt: string, pants: string): Employee => ({
+const emp = (id: string, name: string, role: string, team: string, seat: Workstation, arrive: number, leave: number, from: -1 | 1, skin: string, hair: string, shirt: string, pants: string, collaboration?: Employee["collaboration"]): Employee => ({
   id, name, role, team, seat, arrive, leave, from,
+  collaboration,
   look: { chest: shirt, sleeve: shirt, pants, skin, hair, boots: "#2a2622", lanyard: "#1f5fbf" },
 });
 
 export const EMPLOYEES: Employee[] = [
   emp("EMP-PRASAD", "Prasad", "Software developer", "Development", findWs(1, "A", -9.5), 7.75, 17.9, -1, "#a87556", "#1c1815", "#d9dee3", "#33384a"),
-  emp("EMP-VASEEM", "Vaseem", "Software developer", "Development", findWs(1, "B", -9.5), 8.28, 18.1, 1, "#c99a78", "#2b2118", "#6f95b8", "#2d3640"),
-  emp("EMP-YASIR", "Yasir", "Software developer", "Development", findWs(2, "A", -6), 8.42, 17.8, -1, "#8d6248", "#101010", "#b98a5e", "#3a3f46"),
+  emp("EMP-VASEEM", "Vaseem", "Software developer", "Development", findWs(1, "B", -9.5), 8.28, 18.1, 1, "#c99a78", "#2b2118", "#6f95b8", "#2d3640", { partnerId: "EMP-YASIR", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
+  emp("EMP-YASIR", "Yasir", "Software developer", "Development", findWs(1, "B", -6), 8.42, 17.8, -1, "#8d6248", "#101010", "#b98a5e", "#3a3f46", { partnerId: "EMP-VASEEM", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
   emp("EMP-KISHORE", "Kishore", "BMS supervisor", "Building management", findWs(3, "BMS", -11), 8.07, 18.3, 1, "#c99a78", "#1c1815", "#1f4f8a", "#2a2f38"),
   emp("EMP-GURU", "Guru", "Project engineer", "Projects", findWs(4, "A", -13), 8.55, 17.7, 1, "#a87556", "#101010", "#8a9a7b", "#3a3a3a"),
   emp("EMP-MANO", "Mano", "Project engineer", "Projects", findWs(4, "B", -13), 8.7, 18.0, -1, "#e0b896", "#4a3322", "#c46a5a", "#2d3640"),

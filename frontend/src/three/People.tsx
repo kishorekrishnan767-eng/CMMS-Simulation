@@ -7,6 +7,7 @@ import { useUi } from "../store/ui";
 import { explodeOffset, floorY } from "./constants";
 import { EMPLOYEES, KISHORE, type Employee } from "./office";
 import { Person, type Joints } from "./Person";
+import { player, playerPose } from "./player";
 import { staffPose } from "./staff";
 import { liftRiders, techWorld } from "./Technicians";
 
@@ -65,13 +66,18 @@ const EmployeeAvatar = memo(function EmployeeAvatar({ emp }: { emp: Employee }) 
     if (!r) return;
     const ui = useUi.getState();
     const dt = Math.min(delta, 0.05);
-    const p = staffPose(emp, simNowMs());
-    const followed = ui.following === emp.id;
+    // Kishore under keyboard control ignores the clock: he is wherever the player has walked him
+    const steered = emp.id === KISHORE.id && player.active;
+    const p = steered ? playerPose() : staffPose(emp, simNowMs());
+    const followed = ui.following === emp.id || steered;
     // selected while still at home: start trailing them the moment they arrive
     if (prevPhase.current === "away" && p.phase === "arriving" && ui.selectedPersonId === emp.id && !followed) ui.fly({ preset: "person", personId: emp.id });
     prevPhase.current = p.phase;
     // a followed person is always shown (the camera's cutaway follows them, not the other way round)
-    const present = p.phase !== "away" && people && (followed || ui.cutaway === null || p.level <= ui.cutaway + 0.01);
+    // in first person (and in the car) his own body is not drawn: the camera is his eyes
+    const present = steered
+      ? false
+      : p.phase !== "away" && people && (followed || ui.cutaway === null || p.level <= ui.cutaway + 0.01);
     r.root.visible = present;
     // name tags only when the camera is reasonably close (otherwise they clutter the overview)
     const near = state.camera.position.distanceTo(r.root.position) < 48 || ui.selectedPersonId === emp.id;

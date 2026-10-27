@@ -11,12 +11,16 @@ import { DuctRiser, FcuBranch, PipeNetwork, RoofCollector } from "./Equipment/Di
 import { ExhaustFan, SupplyFan } from "./Equipment/FanModels";
 import { Chiller, FanCoilUnit, Pump } from "./Equipment/PlantModels";
 import { LiftShaft } from "./LiftShaft";
+import { CutawayOutline } from "./CutawayOutline";
+import { FloorFocus } from "./FloorFocus";
+import { PlayerController } from "./PlayerController";
 import { FloorBadges, HeatOverlay } from "./Overlays";
 import { City } from "./City";
 import { Ground, QUALITY, SkyAndLight } from "./SceneEnvironment";
 import { Employees } from "./People";
 import { Technicians } from "./Technicians";
 import { WorkOrderPins } from "./WorkOrderPins";
+import PlayerCar from "./PlayerCar";
 
 function AssetModel({ asset }: { asset: Asset }) {
   switch (asset.asset_type) {
@@ -94,7 +98,9 @@ function Content({ orbit, interactive }: { orbit: boolean; interactive: boolean 
       <SkyAndLight />
       <Ground />
       <City />
+      <PlayerCar />
       <Building renderLevel={(level) => (byLevel.get(level) ?? []).map((a) => <AssetModel key={a.id} asset={a} />)} />
+      <CutawayOutline />
       <StaticPlant />
       <LiftShaft />
       <HeatOverlay />
@@ -103,6 +109,8 @@ function Content({ orbit, interactive }: { orbit: boolean; interactive: boolean 
       <Technicians />
       <Employees />
       <CameraRig orbit={orbit} />
+      {interactive && <PlayerController />}
+      {interactive && <FloorFocus />}
       {interactive && <FpsMonitor />}
       {q.bloom && (
         <EffectComposer multisampling={0}>

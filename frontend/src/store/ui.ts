@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type Quality = "low" | "medium" | "high";
-export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "bms" | "entrance" | "floor" | "asset" | "follow" | "person";
+export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "bms" | "entrance" | "floor" | "asset" | "follow" | "person" | "player";
 export type ThemeMode = "dark" | "light";
 
 export interface CameraGoal {
@@ -48,8 +48,8 @@ interface UiState {
   cameraGoal: CameraGoal;
   fps: number;
   rightPanelOpen: boolean;
-  /** "auto" resolves to the job tab when the selected asset has open work, else its telemetry. */
-  rightTab: "ops" | "job" | "asset" | "person" | "auto";
+  /** "auto" (a machine was just clicked) shows the Process tab. */
+  rightTab: "process" | "ops" | "job" | "asset" | "person" | "auto";
   selectedPersonId: string | null;
   /** Id of the person the camera is currently trailing (technician or employee). */
   following: string | null;
@@ -81,7 +81,7 @@ export const useUi = create<UiState>((set, get) => ({
   cameraGoal: { preset: "overview", nonce: 0 },
   fps: 0,
   rightPanelOpen: true,
-  rightTab: "ops",
+  rightTab: "process",
   selectedPersonId: null,
   following: null,
   layerPanel: null,
@@ -96,11 +96,11 @@ export const useUi = create<UiState>((set, get) => ({
     set(patch);
   },
   selectAsset: (id, fly = true) => {
-    set({ selectedAssetId: id, selectedPersonId: null, rightPanelOpen: true, rightTab: id ? "auto" : "ops" });
+    set({ selectedAssetId: id, selectedPersonId: null, isolatedFloor: null, rightPanelOpen: true, rightTab: id ? "auto" : "process" });
     if (id && fly) get().fly({ preset: "asset", assetId: id });
   },
   selectPerson: (id) => {
-    set({ selectedPersonId: id, selectedAssetId: null, rightPanelOpen: true, rightTab: id ? "person" : "ops" });
+    set({ selectedPersonId: id, selectedAssetId: null, rightPanelOpen: true, rightTab: id ? "person" : "process" });
     if (id) get().fly({ preset: "person", personId: id });  // CameraRig falls back to the entrance while they are not in yet
   },
   fly: (goal) => set({ cameraGoal: { ...goal, nonce: nonce++ } }),

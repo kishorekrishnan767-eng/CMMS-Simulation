@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     sim_max_minutes_per_tick: int = 12
     # Wall-clock pacing multiplier of the guided demo (1.0 = cinematic, 0 = as fast as possible).
     demo_pace: float = 1.0
-    # Operations autopilot (random wear + the simulated crew working every job). Toggle at runtime via the UI.
-    autopilot: bool = True
+    # Operations autopilot (random wear + the simulated crew working every job). Off by default so a demo only shows what you start; switch it on from the Overview tab.
+    autopilot: bool = False
 
     @property
     def cors_origin_list(self) -> list[str]:

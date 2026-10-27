@@ -33,14 +33,14 @@ for (const [path, marker] of PAGES) {
     if (path === "/sim") {
       await expect(page.locator("canvas").first()).toBeVisible();
       await expect(page.getByTestId("layer-ribbon")).toBeVisible();
-      await expect(page.getByTestId("sim-clock")).toContainText("2026-03-02");
+      await expect(page.getByTestId("sim-toggle")).toBeVisible(); // run / pause only: the product shows no clock
     }
     await page.waitForTimeout(1200);
     expect(errors, errors.join("\n")).toEqual([]);
   });
 }
 
-test("header: SIMULATED badge, sim clock, speed control and role switcher", async ({ page, request }) => {
+test("header: SIMULATED badge, run/pause control and role switcher", async ({ page, request }) => {
   await page.goto("/sim");
   await expect(page.getByTestId("sim-controls")).toBeVisible();
   await page.getByTestId("role-switcher").click();

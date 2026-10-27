@@ -5,7 +5,11 @@ import { simNowMs } from "../store/live";
 import { useUi } from "../store/ui";
 import { mulberry32, occupancyAt, sunElevation } from "./constants";
 import { cap, merge, part } from "./Person";
+import { CAR_COLORS, CROSSINGS, EXTENT, ROAD_W, ROAD_X, ROAD_Z, SIDEWALK_W, carParkSpots, cells, signalState, type Cell } from "./cityMap";
+import { lightingMs } from "./lighting";
 import { QUALITY } from "./SceneEnvironment";
+import { trafficCars } from "./traffic";
+import { vehicle } from "./vehicle";
 
 /*
  * The city around the Livewire Digital Solutions campus — fully procedural and instanced.
@@ -17,30 +21,7 @@ import { QUALITY } from "./SceneEnvironment";
  * window and street lighting follow the simulation clock's day/night.
  */
 
-export const X_LINES = [-250, -196, -122, -48, 48, 122, 196, 250];
-export const Z_LINES = [-250, -186, -110, -36, 38, 112, 188, 250];
-const ROAD_X = X_LINES.slice(1, -1); // streets (run along z)
-const ROAD_Z = Z_LINES.slice(1, -1); // avenues (run along x)
-const EXTENT = 250;
-const ROAD_W = 9;
-const SIDEWALK_W = 2.4;
-const INSET = ROAD_W / 2 + SIDEWALK_W + 0.6;
-const PARK = { ix: 4, iz: 2 }; // cell (column, row) used as the park
-
-type Kind = "campus" | "downtown" | "park" | "suburb";
-interface Cell { x0: number; x1: number; z0: number; z1: number; kind: Kind; ix: number; iz: number }
-
-function cells(): Cell[] {
-  const out: Cell[] = [];
-  for (let i = 0; i < X_LINES.length - 1; i++) {
-    for (let j = 0; j < Z_LINES.length - 1; j++) {
-      const ring = Math.max(Math.abs(i - 3), Math.abs(j - 3));
-      const kind: Kind = ring === 0 ? "campus" : i === PARK.ix && j === PARK.iz ? "park" : ring === 1 ? "downtown" : "suburb";
-      out.push({ x0: X_LINES[i] + INSET, x1: X_LINES[i + 1] - INSET, z0: Z_LINES[j] + INSET, z1: Z_LINES[j + 1] - INSET, kind, ix: i, iz: j });
-    }
-  }
-  return out;
-}
+export { X_LINES, Z_LINES } from "./cityMap";
 
 /** Night factor 0 (day) … 1 (night) from the sim clock. */
 export const nightFactor = (ms: number) => 1 - THREE.MathUtils.smoothstep(sunElevation(ms), -0.1, 0.18);
@@ -303,7 +284,7 @@ function Buildings({ lots }: { lots: Lots }) {
   }, [lots]);
 
   useFrame(() => {
-    const night = nightFactor(simNowMs());
+    const night = nightFactor(lightingMs());
     mats.house.emissiveIntensity = night * 0.9;
     mats.tower.emissiveIntensity = night * 1.1;
   });
@@ -375,7 +356,7 @@ function StreetLights() {
     heads.current!.instanceMatrix.needsUpdate = true;
   }, [spots]);
   useFrame(() => {
-    headMat.emissiveIntensity = nightFactor(simNowMs()) * 2.2;
+    headMat.emissiveIntensity = nightFactor(lightingMs()) * 2.2;
   });
   return (
     <group>
@@ -391,8 +372,77 @@ function StreetLights() {
 }
 
 // ------------------------------------------------------------------------------------------ traffic
-interface Car { road: number; alongX: boolean; at: number; lane: number; dir: 1 | -1; speed: number; offset: number; bus: boolean; color: string }
-const CAR_COLORS = ["#d8dcdf", "#2c3238", "#b2312a", "#1f4f8a", "#e6e2d6", "#7c858e", "#3c6e57", "#9a9fa4", "#f2f2ef", "#5b3f63"];
+/*
+ * Traffic is a small car-following simulation (wall-clock time), not cars on rails:
+ *
+ *   Intelligent Driver Model:  a = A·[ 1 − (v/v0)⁴ − (sStar / s)² ],   sStar = s0 + v·T + v·Δv / (2·√(A·B))
+ *     A = 2 m/s² (acceleration)   B = 3 m/s² (comfortable braking)   T = 1.3 s (time gap)   s0 = 2.5 m (jam gap)
+ *     s = bumper-to-bumper gap to whatever is ahead, Δv = closing speed.
+ *   "Whatever is ahead" is the next car in the same lane, a red (or yellow, if it can stop) signal at the
+ *   next crossing treated as a stopped car on the stop line, or the player's car if it is in the lane.
+ *   The strictest of these wins, so cars queue at lights, never overlap and brake lights come on.
+ */
+const LOOP = 400; // cars wrap at ±200 m, well outside the visible city
+const A_MAX = 2;
+const B_COMF = 3;
+const T_GAP = 1.3;
+const S0 = 2.5;
+const STOP_OFFSET = ROAD_W / 2 + 1.8; // stop line: just before the zebra crossing
+
+interface Car {
+  alongX: boolean;
+  at: number;
+  dir: 1 | -1;
+  lane: number;
+  bus: boolean;
+  color: string;
+  len: number;
+  v0: number;
+  /** Distance travelled along the lane, 0…LOOP. */
+  u: number;
+  v: number;
+  a: number;
+  on: boolean;
+  braking: boolean;
+  /** Crossings on this road, as (coordinate along the road, signal stagger). */
+  stops: { coord: number; k: number }[];
+}
+
+function buildCars(count: number): Car[] {
+  const rnd = mulberry32(77);
+  const roads = [...ROAD_Z.map((z) => ({ alongX: true, at: z })), ...ROAD_X.map((x) => ({ alongX: false, at: x }))];
+  // more traffic on the streets around the campus than on the outskirts
+  const weight = (at: number) => ([-36, 38, -48, 48].includes(at) ? 3 : [-110, 112, -122, 122].includes(at) ? 2 : 1);
+  const pool = roads.flatMap((r) => Array.from({ length: weight(r.at) }, () => r));
+  const cars: Car[] = Array.from({ length: count }, (_, i) => {
+    const r = pool[i % pool.length];
+    const dir: 1 | -1 = (i % 2 === 0) !== (Math.floor(i / pool.length) % 2 === 1) ? 1 : -1;
+    const bus = i % 11 === 5;
+    const stops = (r.alongX ? ROAD_X : ROAD_Z).map((coord) => ({
+      coord,
+      k: (CROSSINGS.find((c) => (r.alongX ? c.x === coord && c.z === r.at : c.z === coord && c.x === r.at)) ?? { k: 0 }).k,
+    }));
+    return {
+      alongX: r.alongX, at: r.at, dir, lane: (r.alongX ? 1 : -1) * dir * 2.2, bus,
+      color: bus ? (i % 2 ? "#e0a326" : "#f1f1ee") : CAR_COLORS[Math.floor(rnd() * CAR_COLORS.length)],
+      len: bus ? 11 : 4.2, v0: bus ? 8.5 : 11 + rnd() * 4, u: 0, v: 0, a: 0, on: true, braking: false, stops,
+    };
+  });
+  // spread the cars of each lane evenly round the loop so nobody starts on top of anybody
+  const lanes = new Map<string, Car[]>();
+  for (const c of cars) {
+    const key = `${c.alongX}${c.at}${c.dir}`;
+    lanes.set(key, [...(lanes.get(key) ?? []), c]);
+  }
+  for (const group of lanes.values()) {
+    const phase = rnd();
+    group.forEach((c, i) => {
+      c.u = ((i + phase) / group.length) * LOOP;
+      c.v = c.v0 * 0.8;
+    });
+  }
+  return cars;
+}
 
 function Traffic({ count }: { count: number }) {
   const body = useRef<THREE.InstancedMesh>(null);
@@ -400,22 +450,19 @@ function Traffic({ count }: { count: number }) {
   const base = useRef<THREE.InstancedMesh>(null);
   const front = useRef<THREE.InstancedMesh>(null);
   const rear = useRef<THREE.InstancedMesh>(null);
-  const cars = useMemo<Car[]>(() => {
-    const rnd = mulberry32(77);
-    const roads = [...ROAD_Z.map((z) => ({ alongX: true, at: z })), ...ROAD_X.map((x) => ({ alongX: false, at: x }))];
-    return Array.from({ length: count }, (_, i) => {
-      const r = roads[i % roads.length];
-      const dir: 1 | -1 = (Math.floor(i / roads.length) % 2 === 0 ? 1 : -1);
-      const bus = i % 11 === 5;
-      return {
-        road: i % roads.length, alongX: r.alongX, at: r.at, lane: dir * 2.2, dir, bus,
-        speed: bus ? 7 : 8 + rnd() * 6, offset: rnd() * EXTENT * 2,
-        color: bus ? (i % 2 ? "#e0a326" : "#f1f1ee") : CAR_COLORS[Math.floor(rnd() * CAR_COLORS.length)],
-      };
-    });
-  }, [count]);
+  const brake = useRef<THREE.InstancedMesh>(null);
+  const cars = useMemo(() => buildCars(count), [count]);
+  const lanes = useMemo(() => {
+    const m = new Map<string, Car[]>();
+    for (const c of cars) {
+      const key = `${c.alongX}${c.at}${c.dir}`;
+      m.set(key, [...(m.get(key) ?? []), c]);
+    }
+    return [...m.values()];
+  }, [cars]);
   const lightsFront = useMemo(() => new THREE.MeshLambertMaterial({ color: "#f4f1e6", emissive: new THREE.Color("#fff1c9"), emissiveIntensity: 0.2 }), []);
   const lightsRear = useMemo(() => new THREE.MeshLambertMaterial({ color: "#7a1c18", emissive: new THREE.Color("#ff3b2f"), emissiveIntensity: 0.3 }), []);
+  const lightsBrake = useMemo(() => new THREE.MeshBasicMaterial({ color: "#ff3b2f", toneMapped: false }), []);
 
   useEffect(() => {
     cars.forEach((c, i) => {
@@ -423,28 +470,98 @@ function Traffic({ count }: { count: number }) {
       cabin.current!.setColorAt(i, tmpC.set(c.bus ? c.color : "#28303a"));
     });
     for (const m of [body, cabin]) if (m.current?.instanceColor) m.current.instanceColor.needsUpdate = true;
+    trafficCars.length = 0;
+    cars.forEach((c) => {
+      const along = c.dir > 0 ? c.u - LOOP / 2 : LOOP / 2 - c.u;
+      trafficCars.push({
+        x: c.alongX ? along : c.at + c.lane,
+        z: c.alongX ? c.at + c.lane : along,
+        yaw: c.alongX ? (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : c.dir > 0 ? 0 : Math.PI,
+        v: c.v, len: c.len, on: false, // hidden until the first frame has placed it
+      });
+    });
+    return () => {
+      trafficCars.length = 0;
+    };
   }, [cars]);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
+    const dt = Math.min(delta, 0.05);
     const t = state.clock.elapsedTime;
-    const night = nightFactor(simNowMs());
+    const night = nightFactor(lightingMs());
     lightsFront.emissiveIntensity = 0.2 + night * 2.5;
     lightsRear.emissiveIntensity = 0.3 + night * 1.6;
     // traffic thins out at night: hide a share of the cars (deterministic per car)
     const busy = 0.35 + 0.65 * Math.max(occupancyAt(simNowMs()), 0.25);
-    const L = EXTENT * 2;
     cars.forEach((c, i) => {
-      const s = (((c.offset + t * c.speed) % L) + L) % L - EXTENT;
-      const pos = c.dir * s;
-      const x = c.alongX ? pos : c.at + c.lane;
-      const z = c.alongX ? c.at + c.lane : pos;
+      c.on = (i * 0.618) % 1 < busy;
+    });
+    const pos = (c: Car) => (c.dir > 0 ? c.u - LOOP / 2 : LOOP / 2 - c.u);
+
+    // 1 · acceleration of every car from what is in front of it
+    for (const lane of lanes) {
+      const act = lane.filter((c) => c.on).sort((a, b) => a.u - b.u);
+      act.forEach((c, idx) => {
+        const p = pos(c);
+        let a = A_MAX * (1 - (c.v / c.v0) ** 4);
+        const consider = (gap: number, vLead: number) => {
+          const s = Math.max(gap, 0.05);
+          const sStar = S0 + Math.max(0, c.v * T_GAP + (c.v * (c.v - vLead)) / (2 * Math.sqrt(A_MAX * B_COMF)));
+          a = Math.min(a, A_MAX * (1 - (c.v / c.v0) ** 4 - (sStar / s) ** 2));
+        };
+        if (act.length > 1) {
+          const l = act[(idx + 1) % act.length];
+          let du = l.u - c.u;
+          if (du <= 0) du += LOOP;
+          consider(du - (c.len + l.len) / 2, l.v);
+        }
+        // the next signal whose stop line the bumper has not passed yet
+        let next: { d: number; k: number } | null = null;
+        for (const s of c.stops) {
+          const d = (s.coord - p) * c.dir - STOP_OFFSET - c.len / 2;
+          if (d >= -0.3 && (!next || d < next.d)) next = { d, k: s.k };
+        }
+        if (next) {
+          const lamp = signalState(t, next.k, c.alongX);
+          if (lamp === "red" || (lamp === "yellow" && next.d > (c.v * c.v) / (2 * 3.2) + 1)) consider(next.d, 0);
+        }
+        // the player's car
+        const pa = c.alongX ? vehicle.x : vehicle.z;
+        const pc = c.alongX ? vehicle.z : vehicle.x;
+        const ahead = (pa - p) * c.dir;
+        if (ahead > 0 && ahead < 60 && Math.abs(pc - (c.at + c.lane)) < 2.4) {
+          const along = vehicle.v * (c.alongX ? Math.sin(vehicle.yaw) : Math.cos(vehicle.yaw)) * c.dir;
+          consider(ahead - (c.len + 4.2) / 2, along);
+        }
+        c.a = Math.max(-9, a);
+      });
+    }
+
+    // 2 · move, then draw
+    const L = LOOP;
+    cars.forEach((c, i) => {
+      if (c.on) {
+        c.v = Math.max(0, c.v + c.a * dt);
+        c.u = (c.u + c.v * dt) % L;
+      }
+      c.braking = c.on && (c.a < -0.7 || (c.v < 0.4 && c.a < 0));
+      const along = pos(c);
+      const x = c.alongX ? along : c.at + c.lane;
+      const z = c.alongX ? c.at + c.lane : along;
       const ry = c.alongX ? (c.dir > 0 ? 0 : Math.PI) : c.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
-      const on = (i * 0.618) % 1 < busy ? 1 : 0.0001;
+      const tc = trafficCars[i];
+      if (tc) {
+        tc.x = x;
+        tc.z = z;
+        tc.yaw = c.alongX ? (c.dir > 0 ? Math.PI / 2 : -Math.PI / 2) : c.dir > 0 ? 0 : Math.PI;
+        tc.v = c.v;
+        tc.on = c.on;
+      }
+      const on = c.on ? 1 : 0.0001;
       const len = c.bus ? 2.6 : 1;
       const tall = c.bus ? 1.9 : 1;
       place(base.current!, i, x, 0.36, z, 3.9 * len * on, 0.42 * on, 1.84 * on, ry);
       place(body.current!, i, x, 0.82 * (c.bus ? 1.4 : 1), z, 4.2 * len * on, 0.62 * tall * on, 1.8 * on, ry);
-      tmpO.position.set(c.bus ? 0 : -0.25, 0, 0);
       const ox = Math.cos(ry) * (c.bus ? 0 : -0.25);
       const oz = -Math.sin(ry) * (c.bus ? 0 : -0.25);
       place(cabin.current!, i, x + ox, c.bus ? 2.0 : 1.38, z + oz, (c.bus ? 10.6 : 2.3) * on, (c.bus ? 0.9 : 0.62) * on, 1.66 * on, ry);
@@ -452,8 +569,10 @@ function Traffic({ count }: { count: number }) {
       const fz = -Math.sin(ry) * 2.1 * len;
       place(front.current!, i, x + fx, 0.78, z + fz, 0.08 * on, 0.18 * on, 1.5 * on, ry);
       place(rear.current!, i, x - fx, 0.82, z - fz, 0.08 * on, 0.16 * on, 1.5 * on, ry);
+      const b = c.braking ? 1 : 0.0001;
+      place(brake.current!, i, x - fx * 1.012, 0.82, z - fz * 1.012, 0.09 * b, 0.2 * b, 1.56 * b, ry);
     });
-    for (const m of [base, body, cabin, front, rear]) if (m.current) m.current.instanceMatrix.needsUpdate = true;
+    for (const m of [base, body, cabin, front, rear, brake]) if (m.current) m.current.instanceMatrix.needsUpdate = true;
   });
 
   return (
@@ -476,6 +595,73 @@ function Traffic({ count }: { count: number }) {
       <instancedMesh ref={rear} args={[undefined, lightsRear, count]} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
       </instancedMesh>
+      <instancedMesh ref={brake} args={[undefined, lightsBrake, count]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+      </instancedMesh>
+    </group>
+  );
+}
+
+// ------------------------------------------------------------------------------------------ traffic signals
+/** One signal head per approach of every crossing, standing on the right-hand kerb before the stop line. */
+function Signals() {
+  const poles = useRef<THREE.InstancedMesh>(null);
+  const heads = useRef<THREE.InstancedMesh>(null);
+  const lamps = { red: useRef<THREE.InstancedMesh>(null), yellow: useRef<THREE.InstancedMesh>(null), green: useRef<THREE.InstancedMesh>(null) };
+  const approaches = useMemo(() => CROSSINGS.flatMap((c) => ([1, -1] as const).flatMap((dir) => [
+    { alongX: true, dir, k: c.k, x: c.x - dir * STOP_OFFSET, z: c.z + dir * (ROAD_W / 2 + 0.8) },
+    { alongX: false, dir, k: c.k, x: c.x - dir * (ROAD_W / 2 + 0.8), z: c.z - dir * STOP_OFFSET },
+  ])), []);
+  const prev = useRef<string[]>([]);
+  useEffect(() => {
+    approaches.forEach((a, i) => {
+      place(poles.current!, i, a.x, 1.95, a.z, 0.14, 3.9, 0.14);
+      place(heads.current!, i, a.x, 3.75, a.z, a.alongX ? 0.4 : 0.4, 1.25, 0.4);
+    });
+    poles.current!.instanceMatrix.needsUpdate = true;
+    heads.current!.instanceMatrix.needsUpdate = true;
+  }, [approaches]);
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    let changed = false;
+    approaches.forEach((a, i) => {
+      const lamp = signalState(t, a.k, a.alongX);
+      if (prev.current[i] === lamp) return;
+      prev.current[i] = lamp;
+      changed = true;
+      // lamps sit on the face turned towards the approaching traffic
+      const fx = a.alongX ? -a.dir * 0.21 : 0;
+      const fz = a.alongX ? 0 : -a.dir * 0.21;
+      (["red", "yellow", "green"] as const).forEach((name, row) => {
+        const on = lamp === name ? 1 : 0.0001;
+        place(lamps[name].current!, i, a.x + fx, 4.15 - row * 0.4, a.z + fz, 0.2 * on, 0.26 * on, 0.2 * on);
+      });
+    });
+    if (changed) for (const m of Object.values(lamps)) m.current!.instanceMatrix.needsUpdate = true;
+  });
+  const n = approaches.length;
+  return (
+    <group>
+      <instancedMesh ref={poles} args={[undefined, undefined, n]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshLambertMaterial color="#454c54" />
+      </instancedMesh>
+      <instancedMesh ref={heads} args={[undefined, undefined, n]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshLambertMaterial color="#1a1d21" />
+      </instancedMesh>
+      <instancedMesh ref={lamps.red} args={[undefined, undefined, n]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#ff3b30" toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={lamps.yellow} args={[undefined, undefined, n]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#ffc83d" toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={lamps.green} args={[undefined, undefined, n]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#35d07f" toneMapped={false} />
+      </instancedMesh>
     </group>
   );
 }
@@ -485,12 +671,7 @@ function CarPark() {
   const body = useRef<THREE.InstancedMesh>(null);
   const cabin = useRef<THREE.InstancedMesh>(null);
   const stripes = useRef<THREE.InstancedMesh>(null);
-  const spots = useMemo(() => {
-    const rnd = mulberry32(31);
-    const out: [number, number, string][] = [];
-    for (const x of [26.5, 34.5]) for (let z = -24; z <= 4; z += 3) if (rnd() < 0.78) out.push([x, z, CAR_COLORS[Math.floor(rnd() * CAR_COLORS.length)]]);
-    return out;
-  }, []);
+  const spots = useMemo(() => carParkSpots(), []);
   useEffect(() => {
     spots.forEach(([x, z, c], i) => {
       place(body.current!, i, x, 0.62, z, 4.2, 0.9, 1.8, Math.PI / 2 + (x > 30 ? Math.PI : 0));
@@ -636,7 +817,7 @@ function Clouds() {
   }, []);
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    const night = nightFactor(simNowMs());
+    const night = nightFactor(lightingMs());
     mat.color.setRGB(1 - night * 0.72, 1 - night * 0.7, 1 - night * 0.62);
     data.forEach((p, i) => {
       const x = (((p.x + t * p.speed + 320) % 640) + 640) % 640 - 320;
@@ -718,6 +899,7 @@ export function City() {
       <StreetLights />
       <CarPark />
       <Traffic count={q.cars} />
+      <Signals />
       {q.pedestrians > 0 && <Pedestrians count={q.pedestrians} />}
       {q.clouds && <Clouds />}
       <Airplane altitude={150} z0={-140} z1={60} period={46} phase={0} dir={1} />

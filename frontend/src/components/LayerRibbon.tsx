@@ -56,9 +56,9 @@ function LayerPanel() {
         <div className="text-sm font-semibold">Layer {n} · {layer.name}</div>
         <button className="btn btn-sm" onClick={() => useUi.getState().set({ layerPanel: null })} aria-label="Close layer panel">✕</button>
       </div>
-      <div className="text-xs text-muted">{layer.blurb}. See the Pipeline page for formulas and tables.</div>
+      <div className="text-xs text-muted">{layer.blurb}</div>
       <ul className="mt-2 space-y-1 text-xs">
-        {mine.length === 0 && <li className="text-muted">No events passed through this layer since you opened the page.</li>}
+        {mine.length === 0 && <li className="text-muted">Nothing yet.</li>}
         {mine.map((e) => (
           <li key={e.event_id} className="flex justify-between gap-3 rounded border border-line px-2 py-1">
             <span className="font-medium">{e.event_type}</span>

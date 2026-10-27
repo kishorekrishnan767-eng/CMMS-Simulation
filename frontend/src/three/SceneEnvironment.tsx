@@ -5,6 +5,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { simNowMs } from "../store/live";
 import { useUi } from "../store/ui";
 import { BUILD_D, BUILD_W, hourOfDay, mulberry32, occupancyAt, sunElevation } from "./constants";
+import { lightingMs } from "./lighting";
 
 export const QUALITY = {
   low: { dpr: 1, shadow: 0, env: false, cityDensity: 0.45, cars: 22, pedestrians: 0, clouds: false, mullions: false, bloom: false, haze: false, shadowMap: 512 },
@@ -95,7 +96,7 @@ export function SkyAndLight() {
 
   useFrame(() => {
     if (frameNo.current++ % 45 === 0) gl.shadowMap.needsUpdate = true;
-    const ms = simNowMs();
+    const ms = lightingMs();
     const elev = sunElevation(ms);
     const { zenith, horizon, day } = skyColors(elev);
     domeMat.uniforms.zenith.value.copy(zenith);

@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useAssets, useAutopilot, useTechnicians, useWorkOrders } from "../api/queries";
 import { useLive } from "../store/live";
+import { usePlayer } from "../store/player";
 import { useUi } from "../store/ui";
-import { floorLabel, hourOfDay, isWeekend } from "../three/constants";
+import { floorLabel } from "../three/constants";
 import { EMPLOYEES, KISHORE } from "../three/office";
-import { fmtHour, staffPose } from "../three/staff";
+import { staffPose } from "../three/staff";
 import { Empty, StatusBadge, fmtHM, useSimNow } from "./ui";
 
 const PHASE_LABEL: Record<string, string> = { away: "Not at work", arriving: "Arriving", seated: "At the desk", leaving: "Going home" };
@@ -83,10 +84,8 @@ export default function PersonPanel() {
   const id = useUi((s) => s.selectedPersonId);
   const now = useSimNow(500);
   const emp = EMPLOYEES.find((e) => e.id === id);
-  if (!emp) return <Empty title="Select a person" hint="Click a person in the building, or pick someone from the People list on the left." />;
+  if (!emp) return <Empty title="Select a person" hint="Click a person in the 3D view or pick one from the list." />;
   const p = staffPose(emp, now);
-  const hour = hourOfDay(now);
-  const weekend = isWeekend(now);
   const isSupervisor = emp.id === KISHORE.id;
   return (
     <div className="space-y-4 p-4" data-testid="person-panel">
@@ -99,27 +98,26 @@ export default function PersonPanel() {
       </div>
       <section className="rounded-md border border-line bg-panel2 p-3">
         <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted">
-          <i className={`h-1.5 w-1.5 rounded-full ${p.phase === "away" ? "bg-muted" : "live-dot bg-ok"}`} /> Now
+          <i className="live-dot h-1.5 w-1.5 rounded-full bg-ok" /> Now
         </div>
-        <div className="text-[14px] font-semibold">
-          {p.phase === "away" ? (hour < emp.arrive ? `Not in yet. Arrives about ${fmtHour(emp.arrive)}` : weekend ? "Not working today" : `Went home at ${fmtHour(emp.leave)}`) : `${PHASE_LABEL[p.phase]} · ${p.text}`}
-        </div>
-        {p.phase === "away" && hour < emp.arrive && !weekend && <div className="text-[12px] text-muted">The camera waits at the front door and follows {emp.name} in.</div>}
-        <div className="mt-1 text-[12px] text-muted">
-          Desk on {floorLabel(emp.seat.level)}{isSupervisor ? " (BMS control room)" : ""} · in {fmtHour(emp.arrive)}, out {fmtHour(emp.leave)} (simulated clock, weekdays)
-        </div>
+        <div className="text-[14px] font-semibold">{PHASE_LABEL[p.phase]} · {p.text}</div>
+        <div className="mt-1 text-[12px] text-muted">Desk on {floorLabel(emp.seat.level)}{isSupervisor ? " (BMS room)" : ""}</div>
       </section>
-      <div className="flex gap-2">
-        <button className="btn btn-sm" onClick={() => useUi.getState().fly({ preset: "person", personId: emp.id })} disabled={p.phase === "away"}>Follow {emp.name}</button>
-        {isSupervisor && <button className="btn btn-sm" onClick={() => useUi.getState().fly({ preset: "bms" })}>Show the BMS room</button>}
-      </div>
-      {isSupervisor ? (
-        <SupervisorDesk />
-      ) : (
-        <p className="text-[12.5px] text-muted">{emp.name} works in the {emp.team.toLowerCase()} team. The building's climate systems keep this floor comfortable, and the BMS watches every fan and AC unit that serves it.</p>
+      {emp.collaboration && (
+        <section className="rounded-md border border-accent/30 bg-accent/5 p-3">
+          <div className="mb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-accent">Shared workspace</div>
+          <div className="text-[13px] font-semibold">
+            With {EMPLOYEES.find((p) => p.id === emp.collaboration?.partnerId)?.name}
+          </div>
+          <div className="mt-1 text-[12px] text-muted">{emp.collaboration.activity}</div>
+        </section>
       )}
-      <p className="text-[11px] text-muted">People and their schedules are simulated for this demonstration.</p>
+      <div className="flex gap-2">
+        <button className="btn btn-sm" onClick={() => useUi.getState().fly({ preset: "person", personId: emp.id })} >Follow {emp.name}</button>
+        {isSupervisor && <button className="btn btn-sm" onClick={() => useUi.getState().fly({ preset: "bms" })}>Show the BMS room</button>}
+        {isSupervisor && <button className="btn btn-sm btn-primary" onClick={() => usePlayer.getState().set({ active: true })} data-testid="control-kishore">🎮 Control Kishore</button>}
+      </div>
+      {isSupervisor && <SupervisorDesk />}
     </div>
   );
 }
-

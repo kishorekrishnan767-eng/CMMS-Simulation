@@ -27,10 +27,11 @@ ACTIVE_JOB_STATUSES = ("ASSIGNED", "IN_PROGRESS", "REWORK_REQUIRED", "ON_HOLD")
 
 
 def on_shift(session: Session, tech_id: str, now: datetime) -> bool:
-    hour = now.hour + now.minute / 60.0
-    return session.scalar(select(func.count()).select_from(TechnicianShift).where(
-        TechnicianShift.technician_id == tech_id, TechnicianShift.weekday == now.weekday(),
-        TechnicianShift.start_hour <= hour, TechnicianShift.end_hour > hour)) > 0
+    """Everyone works at every time: there is no night, weekend or shift roster in this product.
+
+    The ``technician_shifts`` rows are kept (seed data, API shape) but no longer gate dispatch.
+    """
+    return True
 
 
 def active_jobs(session: Session, tech_id: str, exclude_wo: int | None = None) -> int:

@@ -1,6 +1,7 @@
 import { useTree } from "../api/queries";
 import type { Health } from "../api/types";
 import { useLive } from "../store/live";
+import { usePlayer } from "../store/player";
 import { useUi, type Quality } from "../store/ui";
 import { EMPLOYEES } from "../three/office";
 import { staffPose } from "../three/staff";
@@ -47,7 +48,7 @@ function People() {
             >
               <i className={`h-2 w-2 shrink-0 rounded-full ${PHASE_DOT[p.phase]}`} />
               <span className="font-semibold">{e.name}</span>
-              <span className="truncate text-muted">{p.phase === "away" ? "not in yet" : e.role}</span>
+              <span className="truncate text-muted">{e.role}</span>
             </button>
           </li>
         );
@@ -76,6 +77,9 @@ export default function LeftPanel() {
       <section>
         <div className="h-section mb-1">People</div>
         <People />
+        <button className="btn btn-sm mt-1.5 w-full" onClick={() => usePlayer.getState().set({ active: !usePlayer.getState().active })} data-testid="control-kishore-left">
+          🎮 Control Kishore
+        </button>
       </section>
 
       <section>

@@ -94,7 +94,15 @@ export interface TimelineItem { t: string; layer: number; type: string; title: s
 export interface OpsLogEntry { t: string | null; wo: string | null; asset_id: string | null; actor: string; role: string; text: string; kind: "action" | "wait" | "warn" | "fault" | "info" }
 export interface AutopilotState {
   enabled: boolean; fault_rate: string; fault_rates: string[]; status: string; error: string | null; next_fault_at: string | null;
+  /** Assets whose repair the crew is fast-tracking (the per-asset Repair button). */
+  expedited: string[];
   log: OpsLogEntry[]; simulated: boolean;
+}
+export interface WalkthroughStep { id: number; layers: string; short: string; title: string; text: string }
+/** The one-click walkthrough: `stage` = steps already done (0..total); `started` once the wear has begun. */
+export interface WalkthroughState {
+  asset_id: string | null; started: boolean; stage: number; total: number; busy: boolean; error: string | null;
+  steps: WalkthroughStep[]; results: Record<string, Record<string, any>>; log: { stage: number; text: string }[]; simulated: boolean;
 }
 export interface ProcedureStep { key: string; label: string; minutes: number }
 export interface ProcedureCatalogue { procedures: Record<string, ProcedureStep[]>; rework: ProcedureStep[]; note: string }

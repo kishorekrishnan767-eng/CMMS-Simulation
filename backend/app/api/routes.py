@@ -166,12 +166,14 @@ def asset_telemetry(
 
 
 @router.get("/telemetry/rejected")
-def rejected_telemetry(limit: int = 50, offset: int = 0, reason: str | None = None,
+def rejected_telemetry(limit: int = 50, offset: int = 0, reason: str | None = None, asset_id: str | None = None,
                        db: Session = Depends(get_read_db)) -> dict[str, Any]:
     limit, offset = paginate(limit, offset)
     stmt = select(RejectedTelemetry)
     if reason:
         stmt = stmt.where(RejectedTelemetry.reason == reason)
+    if asset_id:
+        stmt = stmt.where(RejectedTelemetry.asset_id == asset_id)
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
     rows = db.scalars(stmt.order_by(RejectedTelemetry.id.desc()).limit(limit).offset(offset)).all()
     return {"total": total, "items": [{"id": r.id, "event_id": r.event_id, "asset_id": r.asset_id,

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "./client";
 import type {
-  Anomaly, Asset, AuditRow, AutopilotState, ProcedureCatalogue, BuildingTree, Candidate, Decision, DemoUser, EventEnvelope, InventoryItem, SimState, Technician,
+  Anomaly, Asset, AuditRow, AutopilotState, WalkthroughState, ProcedureCatalogue, BuildingTree, Candidate, Decision, DemoUser, EventEnvelope, InventoryItem, SimState, Technician,
   TelemetrySeries, TimelineItem, VerificationPreview, WorkOrderDetail, WorkOrderSummary,
 } from "./types";
 import { BUILDING_ID } from "../config";
@@ -55,8 +55,14 @@ export const useAudit = (query: string, enabled = true) =>
   useQuery({ queryKey: ["audit", query], queryFn: () => api.get<{ items: AuditRow[]; total: number }>(`/api/audit-logs?${query}`), enabled, refetchInterval: 5000 });
 export const useDeadLetters = (enabled = true) =>
   useQuery({ queryKey: ["dead-letters"], queryFn: () => api.get<{ items: { id: number; event_id: string; event_type: string; consumer: string; attempts: number; error: string; created_at: string }[]; total: number }>("/api/dead-letters"), enabled });
-export const useRejected = () =>
-  useQuery({ queryKey: ["rejected"], queryFn: () => api.get<{ items: { id: number; reason: string; detail: string; sensor_id: string | null; received_at: string }[]; total: number }>("/api/telemetry/rejected?limit=40"), refetchInterval: 6000 });
+export const useRejected = (assetId?: string | null) =>
+  useQuery({
+    queryKey: ["rejected", assetId ?? null],
+    queryFn: () => api.get<{ items: { id: number; reason: string; detail: string; sensor_id: string | null; received_at: string }[]; total: number }>(`/api/telemetry/rejected?limit=${assetId ? 100 : 40}${assetId ? `&asset_id=${assetId}` : ""}`),
+    refetchInterval: 6000,
+  });
+export const useWalkthrough = () =>
+  useQuery({ queryKey: ["walkthrough"], queryFn: () => api.get<WalkthroughState>("/api/walkthrough/state"), refetchInterval: 700 });
 export const useDecision = (id: number | null) => useQuery({ queryKey: ["decision", id], queryFn: () => api.get<Decision>(`/api/decisions/${id}`), enabled: id != null });
 export const useDemoUsers = () => useQuery({ queryKey: ["demo-users"], queryFn: () => api.get<DemoUser[]>("/api/auth/demo-users"), staleTime: Infinity });
 

@@ -68,3 +68,47 @@ def test_autopilot_toggle_is_permissioned_and_audited(client, auth):
     ok = client.patch("/api/autopilot", headers=auth("operator"), json={"enabled": False, "fault_rate": "low"})
     assert ok.status_code == 200 and ok.json()["enabled"] is False and ok.json()["fault_rate"] == "low"
     assert client.get("/api/procedures").json()["procedures"]["SUPPLY_FAN"][0]["key"] == "permit"
+
+
+def test_expedited_repair_runs_with_autopilot_off_and_skips_only_management_waits(client, auth):
+    ap = Autopilot(enabled=False)
+    inject_wear(client, auth)
+    asset = client.get("/api/simulation").json()["active_faults"][0]["asset_id"]
+    ap.expedite(asset)
+    assert ap.state()["expedited"] == [asset]
+    status = None
+    for _ in range(420):
+        step(client, auth, 1)
+        ap.tick(require_running=False)
+        wos = _all_wos(client)
+        status = wos[0]["status"] if wos else None
+        if status == "CLOSED":
+            break
+    assert status == "CLOSED"
+    ap.tick(require_running=False)  # the next pass notices the asset has nothing left to repair
+    assert ap.state()["expedited"] == []  # nothing left to repair → the asset leaves the set
+    assert not client.get("/api/simulation").json()["active_faults"]  # a real repair happened in the world
+    # the work went through the genuine workflow, not a shortcut
+    wo = client.get(f"/api/work-orders/{_all_wos(client)[0]['id']}").json()
+    assert {("approve", "SUPERVISOR"), ("complete", "TECHNICIAN"), ("close", "SUPERVISOR")} <= {
+        (e["action"], e["actor_role"]) for e in wo["events"]}
+
+
+def test_autopilot_off_does_nothing_for_unexpedited_work(client, auth):
+    ap = Autopilot(enabled=False)
+    inject_wear(client, auth)
+    for _ in range(60):
+        step(client, auth, 1)
+        ap.tick(require_running=False)
+    assert ap.state()["status"] == "off"
+    assert all(w["status"] == "DRAFT" for w in _all_wos(client))
+
+
+def test_repair_endpoint_is_permissioned_and_needs_something_to_repair(client, auth):
+    denied = client.post("/api/autopilot/repair", headers=auth("tech1"), json={"asset_id": "AHU-02-FAN-01"})
+    assert denied.status_code == 403
+    rows = client.get("/api/audit-logs?outcome=DENIED&action=sim.repair_asset", headers=auth("admin")).json()["items"]
+    assert rows and rows[0]["username"] == "tech1"
+    nothing = client.post("/api/autopilot/repair", headers=auth("operator"), json={"asset_id": "AHU-02-FAN-01"})
+    assert nothing.status_code == 409
+    assert client.post("/api/autopilot/repair", headers=auth("operator"), json={"asset_id": "NOPE"}).status_code == 404

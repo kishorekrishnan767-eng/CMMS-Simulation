@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useAnomalies, useAsset, useAutopilot, useProcedures, useTechnicians, useVerification, useWorkOrder, useWorkOrders } from "../api/queries";
+import { useAnomalies, useAsset, useAutopilot, useProcedures, useVerification, useWorkOrder, useWorkOrders } from "../api/queries";
 import type { Anomaly, ProcedureStep, WorkOrderDetail } from "../api/types";
 import { useUi } from "../store/ui";
 import { floorLabel } from "../three/constants";
@@ -118,7 +118,7 @@ function issueText(a: Anomaly | undefined) {
       <p>{a.explanation}</p>
       {a.projection_hours != null && (
         <p className="mt-1.5 rounded-md border border-watch/30 bg-watch/10 px-2 py-1 text-[12px]" data-testid="prediction">
-          <b>Prediction:</b> if left alone, vibration is on course to reach the alarm limit in about {Math.max(1, Math.round(a.projection_hours * 60))} min. The work order was raised before that happened.
+          On course to reach the alarm limit in about {Math.max(1, Math.round(a.projection_hours * 60))} min.
         </p>
       )}
       <div className="mt-1.5 flex flex-wrap gap-1">
@@ -141,7 +141,6 @@ export default function JobPanel({ assetId }: { assetId: string }) {
   const { data: anomalies } = useAnomalies(undefined, assetId);
   const { data: catalogue } = useProcedures();
   const { data: ap } = useAutopilot();
-  const { data: techs } = useTechnicians();
   const anomaly = useMemo(() => (anomalies?.items ?? []).find((a) => a.incident_id === wo?.incident_id) ?? (anomalies?.items ?? []).find((a) => a.state === "ACTIVE"), [anomalies, wo?.incident_id]);
 
   if (isLoading || !asset) return <Loading />;
@@ -151,11 +150,11 @@ export default function JobPanel({ assetId }: { assetId: string }) {
         <Header name={asset.name} id={asset.id} where={floorLabel(asset.floor_level)} />
         {anomaly && anomaly.state === "ACTIVE" ? (
           <section className="rounded-md border border-bad/30 bg-bad/5 p-3 text-[12.5px]">
-            <div className="mb-1 font-semibold">Anomaly detected — the decision engine is scoring the risk</div>
+            <div className="mb-1 font-semibold">Anomaly detected</div>
             {issueText(anomaly)}
           </section>
         ) : (
-          <Empty title="No work order for this asset" hint="When the detector raises an anomaly and the risk is high enough, a draft work order appears here and you can follow it end to end." />
+          <Empty title="No work order for this machine" />
         )}
       </div>
     );
@@ -165,7 +164,6 @@ export default function JobPanel({ assetId }: { assetId: string }) {
   const steps = (rework ? catalogue?.rework : catalogue?.procedures[asset.asset_type]) ?? [];
   const lastLog = [...(ap?.log ?? [])].reverse().find((l) => l.wo === wo.number);
   const waitText = lastLog?.kind === "wait" ? lastLog.text : null;
-  const tech = techs?.find((t) => t.id === wo.assigned_technician?.id);
   const inspections = [...wo.inspections];
   const verifications = [...wo.verifications];
   const evidence = wo.events.filter((e) => e.action === "EVIDENCE_ATTACHED").length;
@@ -198,7 +196,7 @@ export default function JobPanel({ assetId }: { assetId: string }) {
 
       <div className="h-section pt-1">Job history</div>
       <ol className="ml-1 border-l border-line" data-testid="job-timeline">
-        <Entry time={anomaly?.detected_at ?? wo.created_at} title={anomaly ? `Issue detected · ${anomaly.incident_id}` : "Maintenance requested"} tone="bad" who="Layer 4 condition monitoring (simulated sensors)">
+        <Entry time={anomaly?.detected_at ?? wo.created_at} title={anomaly ? `Issue detected · ${anomaly.incident_id}` : "Maintenance requested"} tone="bad">
           {issueText(anomaly) ?? <p className="text-muted">{wo.description}</p>}
         </Entry>
         {wo.events.map((e) => {
@@ -212,7 +210,7 @@ export default function JobPanel({ assetId }: { assetId: string }) {
                   {wo.risk_assessment ? (
                     <p>Risk <b>{Math.round(wo.risk_assessment.risk_score)}/100</b> → {wo.risk_assessment.action.toLowerCase().replace("_", " ")}, priority {wo.risk_assessment.priority}. {wo.risk_assessment.reason}</p>
                   ) : <p>{wo.title}</p>}
-                  {evidence > 0 && <p className="mt-1 text-muted">+{evidence} later alert{evidence > 1 ? "s" : ""} attached as evidence — no duplicate work order.</p>}
+                  {evidence > 0 && <p className="mt-1 text-muted">+{evidence} later alert{evidence > 1 ? "s" : ""} added. No duplicate work order.</p>}
                 </Entry>
               );
             case "EVIDENCE_ATTACHED":
@@ -224,11 +222,8 @@ export default function JobPanel({ assetId }: { assetId: string }) {
                 <Entry key={e.id} time={e.occurred_at} title={`Dispatched to ${d.technician_name ?? wo.assigned_technician?.name ?? "technician"}`} who={who}>
                   <div className="rounded-md border border-line bg-panel p-2" data-testid="dispatch-message">
                     <div className="mb-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-accent">Message to {String(d.technician_name ?? "technician").split(" ")[0]}</div>
-                    <div>{wo.number} ({wo.priority}) — {asset.name}, {floorLabel(asset.floor_level)}. {wo.title}.</div>
-                    <div className="mt-1 text-muted">
-                      Parts reserved: {wo.parts.map((p) => `${p.sku}×${p.planned}`).join(", ") || "none"} · travel {d.travel_minutes ?? "?"} min · ETA {fmtHM(d.arrives_at)}
-                      {typeof d.score === "number" && <> · dispatch score {d.score.toFixed(2)}</>}
-                    </div>
+                    <div>{wo.number} ({wo.priority}) — {asset.name}, {floorLabel(asset.floor_level)}</div>
+                    <div className="mt-1 text-muted">Parts: {wo.parts.map((p) => `${p.sku}×${p.planned}`).join(", ") || "none"} · ETA {fmtHM(d.arrives_at)}</div>
                   </div>
                   {Array.isArray(d.shortages) && d.shortages.length > 0 && <p className="mt-1 text-watch">Short of {d.shortages.map((s: { sku: string }) => s.sku).join(", ")} — job goes on hold for parts.</p>}
                 </Entry>
@@ -280,12 +275,6 @@ export default function JobPanel({ assetId }: { assetId: string }) {
         })}
         {wo.status !== "CLOSED" && <Entry time={null} title={nextStep(wo.status)} tone="next" />}
       </ol>
-      {tech && (
-        <p className="text-[11px] text-muted">
-          {tech.name}: {tech.skills.map((s) => s.toLowerCase().replace("_", " ")).join(", ")} · certification L{tech.certification_level} · first-time-fix rate {(tech.performance * 100).toFixed(0)}%
-        </p>
-      )}
-      <p className="text-[11px] text-muted">Times are simulation time (UTC). Procedure steps and durations are demo values; an anomaly is a reason to inspect, not a diagnosis.</p>
     </div>
   );
 }

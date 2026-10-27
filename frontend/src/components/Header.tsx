@@ -3,25 +3,11 @@ import { NavLink, Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useDemoUsers } from "../api/queries";
 import type { Me, SimState } from "../api/types";
-import { APP_NAME, SIM_SPEEDS } from "../config";
-import { simNowMs, useLive } from "../store/live";
+import { APP_NAME } from "../config";
+import { useLive } from "../store/live";
 import { useSession } from "../store/session";
 import { useUi } from "../store/ui";
-import { Simulated, fmtClock, useAct } from "./ui";
-
-function SimClock() {
-  const [text, setText] = useState("");
-  useEffect(() => {
-    const id = window.setInterval(() => setText(fmtClock(simNowMs())), 250);
-    setText(fmtClock(simNowMs()));
-    return () => window.clearInterval(id);
-  }, []);
-  return (
-    <span className="font-mono text-xs tabular-nums text-ink" data-testid="sim-clock" title="Simulation clock (UTC) — all timestamps derive from it">
-      {text}
-    </span>
-  );
-}
+import { Simulated, useAct } from "./ui";
 
 function SimControls() {
   const clock = useLive((s) => s.clock);
@@ -29,26 +15,11 @@ function SimControls() {
   const me = useSession((s) => s.me);
   const can = !!me && ["ADMIN", "OPERATOR", "SUPERVISOR"].includes(me.role);
   const toggle = () => run(() => api.post<SimState>(clock.running ? "/api/simulation/pause" : "/api/simulation/start"));
-  const setSpeed = (speed: number) => run(() => api.patch<SimState>("/api/simulation", { speed }));
   return (
     <div className="flex items-center gap-1.5" data-testid="sim-controls">
       <button className={`btn btn-sm min-w-[64px] ${clock.running ? "" : "btn-primary"}`} onClick={toggle} disabled={busy || !can} title={can ? "" : "Sign in as Operator, Supervisor or Admin to control the simulation"} aria-label={clock.running ? "Pause simulation" : "Start simulation"} data-testid="sim-toggle">
         {clock.running ? "Pause" : "Run"}
       </button>
-      <div className="seg hidden md:flex" role="group" aria-label="Simulation speed" title="Simulation speed: 60× means one real second is one simulated minute">
-        {SIM_SPEEDS.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSpeed(s)}
-            disabled={busy || !can}
-            className="tabular-nums"
-            data-testid={`speed-${s}`}
-            aria-pressed={clock.speed === s}
-          >
-            {s}×
-          </button>
-        ))}
-      </div>
     </div>
   );
 }
@@ -128,13 +99,10 @@ export default function Header() {
         </nav>
         <div className="ml-auto flex items-center gap-2 sm:gap-3">
           <Simulated />
-          <div className="hidden flex-col items-end leading-tight xl:flex">
-            <SimClock />
-            <span className="text-[10px] text-muted">
-              <i className={`mr-1 inline-block h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-bad"}`} />
-              {connected ? "connected" : "offline"}
-            </span>
-          </div>
+          <span className="hidden items-center gap-1 text-[11px] text-muted xl:flex">
+            <i className={`inline-block h-1.5 w-1.5 rounded-full ${connected ? "bg-ok" : "bg-bad"}`} />
+            {connected ? "connected" : "offline"}
+          </span>
           <SimControls />
           <RoleSwitcher />
           <button className="btn btn-sm hidden sm:inline-flex" aria-label="Toggle light or dark theme" onClick={() => useUi.getState().set({ theme: theme === "dark" ? "light" : "dark" })}>

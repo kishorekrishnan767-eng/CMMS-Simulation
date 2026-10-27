@@ -68,7 +68,7 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
     every job starts and ends there (seat → tool cabinet → door → east service line → glass lift in the
     front light-well → corridor → asset). Dispatch proximity and travel time (`3 + 2·|Δfloor|` min) are
     therefore measured from the ground floor. Off-shift technicians are not drawn in the building.
-25. **Operations autopilot** (`app/modules/autopilot`). On by default (`AUTOPILOT=false` disables it; the
+25. **Operations autopilot** (`app/modules/autopilot`). Off by default (`AUTOPILOT=true` enables it; the
     UI toggle changes it at runtime, audited as `sim.autopilot`). It is an API client like the guided-demo
     director: it injects seeded random bearing wear (Poisson process in sim time, rate Off/Low/Normal/High)
     and plays the supervisor, technicians and verifier through the real endpoints with seeded delays. It
@@ -92,3 +92,7 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
     people is stored or sent to the backend.
 29. **Performance trade-off.** City geometry uses cheap Lambert shading; MSAA stays High-only. Measured
     Medium frame rate is recorded by the DoD-17 test in `docs/PERFORMANCE.md`.
+
+29. **No time-of-day.** The scene is always noon, staff are always at their desks, technicians are always on
+    shift (`dispatch.on_shift` is always true) and the header shows no clock. The simulation clock still
+    exists (every timestamp comes from it) but it is an internal detail, not something the demo asks you to read.

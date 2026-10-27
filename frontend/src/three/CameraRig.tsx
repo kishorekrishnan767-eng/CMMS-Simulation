@@ -7,7 +7,11 @@ import { useAssets, useWorkOrders } from "../api/queries";
 import type { Asset } from "../api/types";
 import { useUi, type CameraGoal } from "../store/ui";
 import { explodeOffset, floorY } from "./constants";
+import { player } from "./player";
 import { techWorld } from "./Technicians";
+
+/** True while a fly-to is in progress (the keyboard-controlled Kishore waits for it before the camera trails him). */
+export const camState = { flying: false, /** the camera is Kishore's eyes: the rig must not touch it */ fpv: false };
 
 interface Pose {
   pos: THREE.Vector3;
@@ -36,6 +40,20 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
       const y = floorY(3) + explodeOffset(3, explode);
       return { pos: v(-3, y + 7.5, 21), target: v(-11, y + 1.5, 4.5), cutaway: 3 };
     }
+    case "player": {
+      // third person: behind and above the keyboard-controlled Kishore, floors above cut away
+      const l = Math.round(player.level);
+      const y = floorY(l) + explodeOffset(l, explode);
+      // walking: high enough to look down over the desks (floors above are ghosted, so no ceiling blocks the view);
+      // driving: low and well back, like a chase camera
+      const drive = player.mode === "drive";
+      const back = drive ? 10 : 6.5;
+      return {
+        pos: v(player.x - Math.sin(player.yaw) * back, y + (drive ? 4.2 : 7), player.z - Math.cos(player.yaw) * back),
+        target: v(player.x, y + (drive ? 1.2 : 1), player.z),
+        cutaway: drive ? null : l,
+      };
+    }
     case "person":
     case "entrance":
       // street view of the front door: where staff arrive from
@@ -56,11 +74,11 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
       if (a.floor_level < 0) return basementPose(a.position.x, a.position.z, explode, goal.close);
       const y = floorY(a.floor_level) + explodeOffset(a.floor_level, explode);
       const dist = goal.close ? 0.62 : 1;
-      const off = a.floor_level === 3 ? v(6, 3.6, 8) : v(10 * dist, 8 * dist + 1, 15 * dist);
+      const off = v(10 * dist, 9 * dist + 1, 15 * dist);
       // inner floors: ghost what is above so the asset is not hidden by the ceiling
       return {
         pos: v(a.position.x + off.x, y + off.y, a.position.z + off.z),
-        target: v(a.position.x, y + (a.floor_level === 3 ? 3.2 : 1.6), a.position.z),
+        target: v(a.position.x, y + 1.6, a.position.z),
         cutaway: a.floor_level < 6 ? a.floor_level : null,
       };
     }
@@ -152,6 +170,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
     const c = controls.current;
     if (!c) return;
     const dt = Math.min(delta, 0.05);
+    if (camState.fpv) flight.current = null;
     const f = flight.current;
     const follow = followId.current ? techWorld.get(followId.current) : undefined;
     if (f) {
@@ -173,7 +192,8 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
       c.target.set(THREE.MathUtils.damp(c.target.x, tgt.x, k, dt), THREE.MathUtils.damp(c.target.y, tgt.y, k, dt), THREE.MathUtils.damp(c.target.z, tgt.z, k, dt));
       camera.position.set(THREE.MathUtils.damp(camera.position.x, pos.x, k, dt), THREE.MathUtils.damp(camera.position.y, pos.y, k, dt), THREE.MathUtils.damp(camera.position.z, pos.z, k, dt));
     }
-    c.update();
+    camState.flying = flight.current !== null;
+    if (!camState.fpv) c.update();
   });
 
   return (

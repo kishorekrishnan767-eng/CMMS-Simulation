@@ -26,6 +26,13 @@ Two things happen while the simulation clock runs:
        VERIFIED         supervisor closes with the checklist                       + U(2, 5) min
    With probability P_PARTIAL a first repair is only 40 % effective, so verification fails and the
    rework loop runs — exactly as it would if a person set that on the Control page.
+
+3. Expedited repair (the per-asset "Repair" button). ``expedite(asset_id)`` asks the crew to work that
+   asset's work order even while the autopilot is off (no random faults are injected then). The
+   management waits (review, dispatch, closure delay) are skipped; travel, the repair procedure and the
+   Layer 7 verification window still take their normal sim time, and every step still goes through the
+   public API, so permissions, audit rows and the work-order state machine stay genuine. An asset leaves
+   the expedite set once it has neither an active wear fault nor an active work order.
 """
 from __future__ import annotations
 
@@ -71,6 +78,7 @@ class Autopilot:
         self._plans: dict[int, dict[str, float]] = {}
         self._waiting: dict[int, str] = {}
         self._orders: dict[str, datetime] = {}
+        self._expedite: set[str] = set()
         self._tech_users: dict[str, tuple[str, str]] = {}
         self._names: dict[str, str] = {}
         self._now: datetime | None = None
@@ -81,7 +89,7 @@ class Autopilot:
     # ------------------------------------------------------------------ public
     def state(self) -> dict[str, Any]:
         return {"enabled": self.enabled, "fault_rate": self.fault_rate, "fault_rates": list(MEAN_GAP_H),
-                "status": self.status, "error": self.error,
+                "status": self.status, "error": self.error, "expedited": sorted(self._expedite),
                 "next_fault_at": _iso(self._next_fault) if self._next_fault and self.enabled else None,
                 "log": self.log[-80:], "simulated": True}
 
@@ -97,6 +105,15 @@ class Autopilot:
                 self.enabled = enabled
                 self._next_fault = None
                 self._say(None, "Operations", "SYSTEM", "Autopilot switched " + ("on" if enabled else "off"), "info")
+        return self.state()
+
+    def expedite(self, asset_id: str) -> dict[str, Any]:
+        """Ask the crew to repair ``asset_id`` now, whether or not the autopilot is switched on."""
+        with self._lock:
+            if asset_id not in self._expedite:
+                self._expedite.add(asset_id)
+                self._say({"number": None, "asset_id": asset_id}, "Operations", "SYSTEM",
+                          f"Repair of {asset_id} requested — the crew is fast-tracking it", "info")
         return self.state()
 
     def start(self) -> None:
@@ -116,7 +133,7 @@ class Autopilot:
         with self._lock:
             api = self.api()
             sim = api.get("/api/simulation")
-            if not self.enabled:
+            if not self.enabled and not self._expedite:
                 self.status = "off"
                 return
             if director.busy or director.autoplay:
@@ -138,7 +155,12 @@ class Autopilot:
                 self._next_fault, self._plans, self._waiting, self._orders = None, {}, {}, {}
             wos = api.get("/api/work-orders?active=true")["items"]
             self._receive_due_orders(now)
-            self._maybe_inject(now, sim, wos)
+            self._expedite &= {w["asset_id"] for w in wos} | {
+                f["asset_id"] for f in sim["active_faults"] if f["fault_type"] == "BEARING_WEAR"}
+            if self.enabled:
+                self._maybe_inject(now, sim, wos)
+            else:  # crew-only mode: just the work the user asked for
+                wos = [w for w in wos if w["asset_id"] in self._expedite]
             techs = {t["id"]: t for t in api.get("/api/technicians")}
             for wo in sorted(wos, key=lambda w: w["id"]):
                 try:
@@ -158,7 +180,7 @@ class Autopilot:
 
     def _loop(self) -> None:
         while not self._stop.wait(POLL_SECONDS):
-            if not self.enabled:
+            if not self.enabled and not self._expedite:
                 self.status = "off"
                 continue
             try:
@@ -231,6 +253,7 @@ class Autopilot:
     def _advance(self, wo: dict[str, Any], now: datetime, techs: dict[str, dict[str, Any]]) -> None:
         plan = self._plan(wo["id"])
         wid, status = wo["id"], wo["status"]
+        fast = wo["asset_id"] in self._expedite
         if wo.get("proposed_priority"):
             self._post("supervisor", f"/api/work-orders/{wid}/acknowledge-escalation",
                        {"accept": True, "note": "Escalation accepted after reviewing the new evidence"})
@@ -238,7 +261,7 @@ class Autopilot:
             return
 
         if status == "DRAFT":
-            due = _t(wo["created_at"]) + timedelta(minutes=REVIEW_MIN.get(wo["priority"], 6) + plan["review"])
+            due = _t(wo["created_at"]) + timedelta(minutes=0 if fast else REVIEW_MIN.get(wo["priority"], 6) + plan["review"])
             if now < due:
                 return self._wait(wo, f"Supervisor reviewing the evidence (decision due {_iso(due)[11:16]})")
             self._post("supervisor", f"/api/work-orders/{wid}/approve",
@@ -246,7 +269,7 @@ class Autopilot:
             self._say(wo, self._names.get("supervisor", "Supervisor"), "SUPERVISOR", f"Approved {wo['number']} ({wo['priority']})", at=now)
 
         elif status == "OPEN":
-            due = _t(wo["approved_at"] or wo["updated_at"]) + timedelta(minutes=plan["dispatch"])
+            due = _t(wo["approved_at"] or wo["updated_at"]) + timedelta(minutes=0 if fast else plan["dispatch"])
             if now < due:
                 return self._wait(wo, "Supervisor checking crew availability")
             cands = self.api().get(f"/api/work-orders/{wid}/dispatch-candidates")["candidates"]
@@ -332,7 +355,7 @@ class Autopilot:
             self._say(wo, name, "TECHNICIAN", f"Heading back to {wo['asset_id']} for rework", at=now)
 
         elif status == "VERIFIED":
-            due = _t(wo["verified_at"] or wo["updated_at"]) + timedelta(minutes=plan["close"])
+            due = _t(wo["verified_at"] or wo["updated_at"]) + timedelta(minutes=0 if fast else plan["close"])
             if now < due:
                 return self._wait(wo, "Supervisor reviewing documentation before closure")
             self._post("supervisor", f"/api/work-orders/{wid}/close", {"checklist": CLOSURE, "note": "Closed after verification"})

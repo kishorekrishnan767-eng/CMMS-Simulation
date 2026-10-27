@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
+import { useTexture } from "@react-three/drei";
 import * as THREE from "three";
 import { useAssets } from "../api/queries";
 import { simNowMs, useLive } from "../store/live";
@@ -215,6 +216,26 @@ function floorTexture(kind: "carpet" | "wood" | "tile") {
 }
 
 const FLOOR_KIND: Record<number, "carpet" | "wood" | "tile"> = { 0: "tile", 1: "carpet", 2: "carpet", 3: "carpet", 4: "carpet", 5: "wood" };
+
+// ------------------------------------------------------------------------------------------ Prasad's screen
+/** Shows prasad.jpg as a wallpaper on Prasad's monitor. Rendered as a separate mesh so it can have its own texture. */
+function PrasadScreen() {
+  const tex = useTexture("/prasad.jpg");
+  const prasad = EMPLOYEES.find((e) => e.id === "EMP-PRASAD");
+  if (!prasad) return null;
+  // The screen plane in deskGeometry is 0.56×0.31 at y=1.0, z=0.185 in the desk's local frame.
+  // We overlay this separate mesh at Prasad's desk position so it can carry its own texture.
+  const { dx, dz, yaw } = prasad.seat;
+  // Screen local offset: [0, 1.0, 0.185] rotated by yaw around Y
+  const wx = dx + Math.sin(yaw) * 0.185;
+  const wz = dz + Math.cos(yaw) * 0.185;
+  return (
+    <mesh position={[wx, 1.0, wz]} rotation={[0, yaw + Math.PI, 0]}>
+      <planeGeometry args={[0.56, 0.31]} />
+      <meshBasicMaterial map={tex} toneMapped={false} />
+    </mesh>
+  );
+}
 
 // ------------------------------------------------------------------------------------------ BMS video wall
 const ASSET_SHORT: Record<string, string> = { SUPPLY_FAN: "Supply fan", EXHAUST_FAN: "Exhaust fan", CHILLER: "Chiller", PUMP: "Pump", FCU: "AC unit" };
@@ -443,6 +464,9 @@ export function Interior({ level, ghost }: { level: number; ghost: MutableRefObj
       <instancedMesh ref={tint} args={[kit.staff.tint, mats.staffTint, stations.length]} frustumCulled={false} />
       <instancedMesh ref={fixed} args={[kit.staff.fixed, mats.staffFixed, stations.length]} frustumCulled={false} />
       <instancedMesh ref={plants} args={[kit.plant, mats.furn, (PLANTS[level] ?? []).length || 1]} frustumCulled={false} />
+
+      {/* Prasad's monitor: show his photo as a wallpaper on his specific screen */}
+      {level === 1 && <PrasadScreen />}
 
       {rooms.map((r) => (
         <group key={r.key}>

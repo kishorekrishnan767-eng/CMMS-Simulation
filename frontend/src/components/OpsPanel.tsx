@@ -2,36 +2,26 @@ import { useMemo } from "react";
 import { api } from "../api/client";
 import { useAssets, useAutopilot, useProcedures, useTechnicians, useWorkOrders } from "../api/queries";
 import type { AutopilotState, Health } from "../api/types";
-import { toastFor, useLive } from "../store/live";
+import { useLive } from "../store/live";
 import { useSession } from "../store/session";
 import { useUi } from "../store/ui";
 import { floorLabel } from "../three/constants";
 import { techPose } from "../three/techPath";
-import { StatusBadge, fmtHM, useAct, useSimNow } from "./ui";
+import { StatusBadge, useAct, useSimNow } from "./ui";
 
 const RATE_LABEL: Record<string, string> = { off: "Off", low: "Low", normal: "Normal", high: "High" };
-const RATE_HINT: Record<string, string> = {
-  off: "no new wear — only what you inject",
-  low: "about one fault every 8 sim hours",
-  normal: "about one fault every 4 sim hours",
-  high: "about one fault every 1.5 sim hours",
-};
-const KIND_DOT: Record<string, string> = { action: "bg-accent", wait: "bg-line", warn: "bg-watch", fault: "bg-bad", info: "bg-muted", ok: "bg-ok", bad: "bg-bad" };
 
+/** One switch: let the building run itself (random wear, crew handles every job), or keep it manual. */
 function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
   const { run, busy } = useAct();
   const me = useSession((s) => s.me);
-  const running = useLive((s) => s.clock.running);
   const can = !!me && ["ADMIN", "OPERATOR", "SUPERVISOR"].includes(me.role);
   const patch = (body: Partial<{ enabled: boolean; fault_rate: string }>) => run(() => api.patch<AutopilotState>("/api/autopilot", body));
   if (!ap) return null;
   return (
     <section className="rounded-md border border-line p-3" data-testid="autopilot-card">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <div className="text-[13px] font-semibold">Automatic operations</div>
-          <div className="text-[11.5px] text-muted">Machines wear at random and the crew handles every job, as in real life. Turn off to do each step yourself.</div>
-        </div>
+        <div className="text-[13px] font-semibold">Automatic mode</div>
         <button
           role="switch"
           aria-checked={ap.enabled}
@@ -44,24 +34,18 @@ function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
           <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${ap.enabled ? "left-[18px]" : "left-0.5"}`} />
         </button>
       </div>
-      <div className="mt-2.5">
-        <div className="mb-1 text-[11px] text-muted">Random equipment wear</div>
-        <div className="seg" role="group" aria-label="Fault frequency">
-          {ap.fault_rates.map((r) => (
-            <button key={r} aria-pressed={ap.fault_rate === r} disabled={busy || !can} onClick={() => patch({ fault_rate: r })} data-testid={`fault-rate-${r}`}>
-              {RATE_LABEL[r] ?? r}
-            </button>
-          ))}
+      {ap.enabled && (
+        <div className="mt-2.5">
+          <div className="mb-1 text-[11px] text-muted">How often machines wear</div>
+          <div className="seg" role="group" aria-label="Fault frequency">
+            {ap.fault_rates.map((r) => (
+              <button key={r} aria-pressed={ap.fault_rate === r} disabled={busy || !can} onClick={() => patch({ fault_rate: r })} data-testid={`fault-rate-${r}`}>
+                {RATE_LABEL[r] ?? r}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="mt-1 text-[11px] text-muted">{RATE_HINT[ap.fault_rate]}</div>
-      </div>
-      <div className="mt-2 flex items-center gap-1.5 text-[11.5px]">
-        <i className={`h-1.5 w-1.5 rounded-full ${ap.enabled && running ? "live-dot bg-ok" : "bg-muted"}`} />
-        <span className="text-muted">
-          {!ap.enabled ? "Manual mode — do every step yourself from Work orders" : !running ? "Press Run in the header to start the clock" : ap.status}
-          {ap.enabled && running && ap.next_fault_at && ap.fault_rate !== "off" ? ` · next wear event due ≈ ${fmtHM(ap.next_fault_at)}` : ""}
-        </span>
-      </div>
+      )}
       {ap.error && <div className="mt-1 text-[11px] text-bad">{ap.error}</div>}
     </section>
   );
@@ -129,7 +113,7 @@ function Crew() {
                   </span>
                 </span>
                 <span className="block truncate text-[11.5px] text-muted">
-                  {busyNow && wo ? `${wo.number} · ${p.text}` : `${floorLabel(0)} crew room · ${t.skills.map((s) => s.toLowerCase().replace("_", " ")).join(", ")}`}
+                  {busyNow && wo ? `${wo.number} · ${p.text}` : "in the crew room"}
                 </span>
               </span>
             </button>
@@ -143,7 +127,7 @@ function Crew() {
 function ActiveJobs() {
   const { data } = useWorkOrders("&active=true");
   const items = data?.items ?? [];
-  if (!items.length) return <p className="rounded-md border border-dashed border-line p-3 text-center text-[12px] text-muted">No open work. Everything is running normally.</p>;
+  if (!items.length) return <p className="rounded-md border border-dashed border-line p-3 text-center text-[12px] text-muted">No open work.</p>;
   return (
     <ul className="space-y-1.5" data-testid="active-jobs">
       {items.map((w) => (
@@ -170,39 +154,7 @@ function ActiveJobs() {
   );
 }
 
-function Log({ ap }: { ap: AutopilotState | undefined }) {
-  const events = useLive((s) => s.recentEvents);
-  // the autopilot narrates what the crew does (and why they wait); without it, fall back to the event stream
-  const rows = useMemo(() => {
-    if (ap?.enabled && ap.log.length) {
-      return [...ap.log].reverse().slice(0, 40).map((l, i) => ({ key: `a${i}`, t: l.t, kind: l.kind, who: l.actor, text: l.text, asset: l.asset_id }));
-    }
-    return events.slice(0, 40).flatMap((e) => {
-      const t = toastFor(e);
-      return t ? [{ key: e.event_id, t: e.occurred_at, kind: t.kind, who: e.asset_id ?? "", text: `${t.title}${t.body ? ` — ${t.body}` : ""}`, asset: e.asset_id }] : [];
-    });
-  }, [ap, events]);
-  if (!rows.length) return <p className="text-[12px] text-muted">Nothing has happened yet. Start the clock to bring the building to life.</p>;
-  return (
-    <ul className="space-y-2" data-testid="ops-log">
-      {rows.map((r) => (
-        <li key={r.key} className="fade-in flex gap-2 text-[12px] leading-snug">
-          <span className="mono w-10 shrink-0 pt-px text-muted">{r.t ? fmtHM(r.t) : ""}</span>
-          <i className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${KIND_DOT[r.kind] ?? "bg-muted"}`} />
-          <span className="min-w-0">
-            {r.who && <b className="font-semibold">{r.who}: </b>}
-            <span className={r.kind === "wait" ? "text-muted" : ""}>{r.text}</span>
-            {r.asset && (
-              <button className="ml-1 text-accent hover:underline" onClick={() => useUi.getState().selectAsset(r.asset)}>view</button>
-            )}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/** Right-panel overview: how the building, the crew and the open work stand right now. */
+/** Right-panel overview: equipment health, open work and the crew. */
 export default function OpsPanel() {
   const { data: ap } = useAutopilot();
   return (
@@ -219,10 +171,6 @@ export default function OpsPanel() {
       <section>
         <div className="h-section mb-1.5">Open work</div>
         <ActiveJobs />
-      </section>
-      <section>
-        <div className="h-section mb-1.5">Operations log</div>
-        <Log ap={ap} />
       </section>
     </div>
   );

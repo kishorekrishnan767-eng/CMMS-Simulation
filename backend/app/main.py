@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_autopilot.router)
     app.include_router(routes_cmms.router)
     app.include_router(routes_demo.router)
+    app.include_router(routes_demo.walkthrough_router)
     app.include_router(routes.ws_router)
 
     @app.get("/api/health")

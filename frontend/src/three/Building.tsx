@@ -172,9 +172,11 @@ export function Floor({ level, children }: FloorProps) {
     if (ceil.current) ceil.current.visible = !open;
     if (lights.current) lights.current.visible = !open;
     const isolatedOut = ui.isolatedFloor !== null && ui.isolatedFloor !== level;
-    // cutaway: everything above the inspected level is lifted off (like a section drawing)
+    // Section view: floors above the one being inspected are lifted off completely, so nothing stands between
+    // the camera and the machine. CutawayOutline draws their faint outline so the tower is still readable.
     g.visible = ui.cutaway === null || level <= ui.cutaway;
-    const target = isolatedOut ? 1 : ui.xray ? 0.7 : 0;
+    const inspectedFloor = ui.cutaway === level;
+    const target = isolatedOut ? 1 : inspectedFloor ? 0.2 : ui.xray ? 0.7 : 0;
     ghost.current = THREE.MathUtils.damp(ghost.current, target, 8, delta);
     const k = ghost.current;
     mats.slab.opacity = 1 - k * 0.8;
@@ -186,7 +188,7 @@ export function Floor({ level, children }: FloorProps) {
     mats.glass.opacity = 0.2 * (1 - k * 0.8);
     for (const m of [mats.slab, mats.wall, mats.core, mats.desk, mats.ceiling, mats.metal]) {
       m.transparent = k > 0.02;
-      m.depthWrite = k < 0.5;
+      m.depthWrite = k < 0.02;
     }
     const occ = occupancyAt(simNowMs());
     const on = occ > rand * 0.85 ? 1 : 0;

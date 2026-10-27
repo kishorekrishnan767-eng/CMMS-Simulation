@@ -54,17 +54,29 @@ header role switcher logs in as any of them.
 
 ## The building, the city and the people
 
-The live view shows the Livewire Digital Solutions building inside a small animated city (traffic, pedestrians,
-clouds, aircraft, sun and moon that follow the simulation clock). Inside, developers sit at their desks on
-Floors 1, 2 and 4, management on Floor 5, and **Kishore, the BMS supervisor**, works at a console in the
-Floor 3 control room under a live video wall of every machine. Pick **Kishore** (or anyone) in the People
-list on the left: the camera trails them from the street, through the lobby and glass lift, to their desk.
-The **BMS room** camera button shows the control room. Use **Watch the demo** for a guided, plain-language
-walk through one incident: early warning, risk decision, approval, dispatch, repair and independent check.
+The live view shows the Livewire Digital Solutions building inside a small animated city (traffic with traffic
+lights, pedestrians, clouds, aircraft). It is always daytime and everybody is always at work: there is no
+working day, night or weekend. Inside, developers sit at their desks on Floors 1, 2 and 4, management on
+Floor 5, and **Kishore, the BMS supervisor**, works at a console in the Floor 3 control room.
+
+**Looking around.** Click any machine and the camera flies to it. Every floor above the one you are looking
+at is lifted off (drawn only as a faint outline), so you can zoom into any floor, the basement plant room
+included, and orbit or pan inside it. Zoom out to get the whole tower back.
+
+**Anomaly demo.** Click a machine, then **Start anomaly** in the **Process** tab (or **Inject anomaly** in
+the **Machine** tab). The whole process plays by itself, or one click per step if you pick *Step by step*:
+duplicate check, anomaly found, risk and one work order, Kishore approves, technician dispatched, technician
+walks to the machine and repairs it (live checklist), independent verification and closure. Every step is
+the real backend workflow, with the clock paused and jumped forward, so nothing waits in real time.
+
+**Control Kishore** (left panel, or in step 4): you see through his eyes. **W/A/S/D** walk, drag the mouse
+(or the arrow keys) to look, **Shift** runs, **R/F** ride the glass lift, **E** sits at his BMS desk (which
+approves the job in step 4) or gets into the car. In the car: **W** gas, **S** brake/reverse, **A/D** steer,
+**Space** handbrake, **Shift** boost, **E** park. **Esc** gives control back. *Jump to desk* is the shortcut.
 
 ## Live operations (autopilot)
 
-Open **Live twin** and press **Run**. With the **Operations autopilot** on (right panel → Operations),
+Open **Live twin** and press **Run**. With **Automatic mode** on (right panel → Overview; it is off by default),
 equipment wears at random and the simulated crew handles every job through the real workflow: the
 supervisor approves and dispatches, the technician gets a dispatch message in the ground-floor crew room,
 collects tools, rides the glass lift, works through the job procedure on site, and walks back; the verifier

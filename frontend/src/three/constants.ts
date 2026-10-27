@@ -91,16 +91,9 @@ export function isWeekend(simMs: number) {
   const day = new Date(simMs).getUTCDay();
   return day === 0 || day === 6;
 }
-/** 0..1 occupancy: ramps up 7–9h, plateau, ramps down 17–20h, lower at weekends. */
-export function occupancyAt(simMs: number) {
-  const h = hourOfDay(simMs);
-  let o: number;
-  if (h < 6) o = 0.03;
-  else if (h < 9) o = 0.03 + ((h - 6) / 3) * 0.92;
-  else if (h < 17) o = 0.95;
-  else if (h < 20) o = 0.95 - ((h - 17) / 3) * 0.9;
-  else o = 0.05;
-  return isWeekend(simMs) ? o * 0.25 : o;
+/** 0..1 occupancy. There is no working day in this product: the office is fully staffed at every moment. */
+export function occupancyAt(_simMs: number) {
+  return 0.95;
 }
 /** Sun elevation in radians (−π/2 … π/2): sunrise ≈ 6h, noon ≈ 12h, sunset ≈ 18h. */
 export function sunElevation(simMs: number) {
