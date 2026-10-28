@@ -40,13 +40,14 @@ for (const [path, marker] of PAGES) {
   });
 }
 
-test("header: SIMULATED badge, run/pause control and role switcher", async ({ page, request }) => {
+test("header: SIMULATED badge and run/pause; no sign-in or role to pick, the app acts as Kishore", async ({ page, request }) => {
   await page.goto("/sim");
   await expect(page.getByTestId("sim-controls")).toBeVisible();
-  await page.getByTestId("role-switcher").click();
-  for (const u of ["admin", "operator", "supervisor", "tech1", "tech2", "tech3", "verifier"]) await expect(page.getByTestId(`login-${u}`)).toBeVisible();
-  await page.getByTestId("login-supervisor").click();
-  await expect(page.getByTestId("role-switcher")).toContainText("SUPERVISOR");
+  await expect(page.getByTestId("sim-toggle")).toBeEnabled();
+  await expect(page.getByTestId("role-switcher")).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("twincmms.session") ?? "{}")?.me?.display_name ?? null), { timeout: 15_000 })
+    .toBe("Kishore");
   const me = await call(request, "supervisor", "get", "/api/me");
   expect(me.body.role).toBe("SUPERVISOR");
 });

@@ -17,7 +17,7 @@ export const HX = 20;
 export const HZ = 12;
 export const COLS = [-16.5, -13, -9.5, -6, -2.5, 1];
 
-export type Row = "A" | "B" | "C" | "D" | "BMS";
+export type Row = "A" | "B" | "C" | "D" | "BMS" | "COUPLE";
 export interface Workstation {
   id: string;
   level: number;
@@ -46,6 +46,11 @@ const rowD = (l: number, xs: number[]) => xs.map((x) => ws(l, "D", x, -6.9, 0));
 export const BMS_ROOM = { x0: -19, x1: -3, z0: 3, z1: 11.5, wallZ: 3.35 };
 const consoles = [-16, -11, -6].map((x) => ws(3, "BMS", x, 5.6, Math.PI));
 
+/** Couples room (Floor 1, south-east): Vaseem and Yasar's own glazed office, door on the corridor side (north). It
+ *  stays clear of the AC unit FCU-01-01 at (8, 5) and of the technicians' route along x = 18.8 / z = 1. */
+export const COUPLES_ROOM = { x0: 10, x1: 15.4, z0: 3.4, z1: 11.6, doorX: 12.7 };
+const coupleDesks = [11.9, 13.6].map((x) => ws(1, "COUPLE", x, 9.9, 0)); // side by side, facing the south windows
+
 /** Server room (Floor 2, south-west). */
 export const SERVER_ROOM = { x0: -19, x1: -11, z0: 4.5, z1: 11.5 };
 /** Meeting rooms / boardroom / offices (decor, per level). */
@@ -54,7 +59,7 @@ export const BOARDROOM = { x0: -8, x1: 3, z0: 3.5, z1: 11.5 };
 export const EXEC_OFFICES = { x0: -19, x1: -9, z0: 3.5, z1: 11.5 };
 
 export const WORKSTATIONS: Record<number, Workstation[]> = {
-  1: [...rowA(1, COLS), ...rowB(1, COLS), ...rowC(1, COLS), ...rowD(1, COLS)],
+  1: [...rowA(1, COLS), ...rowB(1, COLS), ...rowC(1, COLS), ...rowD(1, COLS), ...coupleDesks],
   2: [...rowA(2, COLS.slice(2)), ...rowB(2, COLS.slice(2)), ...rowC(2, COLS), ...rowD(2, COLS)],
   3: [...consoles, ...rowC(3, COLS), ...rowD(3, COLS)],
   4: [...rowA(4, COLS), ...rowB(4, COLS), ...rowC(4, COLS), ...rowD(4, COLS)],
@@ -86,9 +91,10 @@ const emp = (id: string, name: string, role: string, team: string, seat: Worksta
 });
 
 export const EMPLOYEES: Employee[] = [
-  emp("EMP-PRASAD", "Prasad", "Software developer", "Development", findWs(1, "A", -9.5), 7.75, 17.9, -1, "#a87556", "#1c1815", "#d9dee3", "#33384a"),
-  emp("EMP-VASEEM", "Vaseem", "Software developer", "Development", findWs(1, "B", -9.5), 8.28, 18.1, 1, "#c99a78", "#2b2118", "#6f95b8", "#2d3640", { partnerId: "EMP-YASIR", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
-  emp("EMP-YASIR", "Yasir", "Software developer", "Development", findWs(1, "B", -6), 8.42, 17.8, -1, "#8d6248", "#101010", "#b98a5e", "#3a3f46", { partnerId: "EMP-VASEEM", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
+  emp("EMP-PRASATH", "Prasath", "Software developer", "Development", findWs(1, "A", -9.5), 7.75, 17.9, -1, "#a87556", "#1c1815", "#d9dee3", "#33384a"),
+  // Vaseem and Yasar work side by side in their own Couples room (Floor 1)
+  emp("EMP-VASEEM", "Vaseem", "Software developer", "Development", findWs(1, "COUPLE", 11.9), 8.28, 18.1, 1, "#c99a78", "#2b2118", "#6f95b8", "#2d3640", { partnerId: "EMP-YASAR", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
+  emp("EMP-YASAR", "Yasar", "Software developer", "Development", findWs(1, "COUPLE", 13.6), 8.42, 17.8, -1, "#8d6248", "#101010", "#b98a5e", "#3a3f46", { partnerId: "EMP-VASEEM", activity: "Pair programming and feature review", start: 10, end: 12.5 }),
   emp("EMP-KISHORE", "Kishore", "BMS supervisor", "Building management", findWs(3, "BMS", -11), 8.07, 18.3, 1, "#c99a78", "#1c1815", "#1f4f8a", "#2a2f38"),
   emp("EMP-GURU", "Guru", "Project engineer", "Projects", findWs(4, "A", -13), 8.55, 17.7, 1, "#a87556", "#101010", "#8a9a7b", "#3a3a3a"),
   emp("EMP-MANO", "Mano", "Project engineer", "Projects", findWs(4, "B", -13), 8.7, 18.0, -1, "#e0b896", "#4a3322", "#c46a5a", "#2d3640"),
@@ -124,7 +130,11 @@ export function routeToDesk(e: Employee): Waypoint[] {
     wp(LIFT.x, s.level, LIFT.landingZ),
   ];
   const aisle = s.dx + 1.75;
-  if (s.row === "BMS") {
+  if (s.row === "COUPLE") {
+    // from the lift landing along the east side to the Couples room door (north wall), then to the desk
+    const cr = COUPLES_ROOM;
+    pts.push(wp(16.9, s.level, 10.4), wp(16.9, s.level, cr.z0 - 0.8), wp(cr.doorX, s.level, cr.z0 - 0.8), wp(cr.doorX, s.level, cr.z0 + 1.2), wp(s.sx, s.level, cr.z0 + 1.2), wp(s.sx, s.level, s.sz));
+  } else if (s.row === "BMS") {
     pts.push(wp(-3.8, s.level, 10.6), wp(aisle, s.level, 10.6), wp(aisle, s.level, s.sz), wp(s.sx, s.level, s.sz));
   } else if (s.dz > 0) {
     pts.push(wp(aisle, s.level, 10.4), wp(aisle, s.level, s.sz), wp(s.sx, s.level, s.sz));

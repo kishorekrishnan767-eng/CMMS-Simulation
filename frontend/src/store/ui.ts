@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export type Quality = "low" | "medium" | "high";
-export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "bms" | "entrance" | "floor" | "asset" | "follow" | "person" | "player";
+export type CameraPreset = "overview" | "roof" | "plant" | "crew" | "bms" | "kishore" | "entrance" | "floor" | "asset" | "follow" | "person" | "player";
 export type ThemeMode = "dark" | "light";
 
 export interface CameraGoal {
@@ -11,6 +11,8 @@ export interface CameraGoal {
   /** Employee id for the "person" preset (camera trails them, with the floors above cut away). */
   personId?: string;
   close?: boolean;
+  /** Seconds the flight takes (default: 0.9–2.2 s by distance). The one-minute run uses longer, gentler moves. */
+  duration?: number;
   nonce: number;
 }
 
@@ -46,6 +48,8 @@ interface UiState {
   showPins: boolean;
   showTechnicians: boolean;
   cameraGoal: CameraGoal;
+  /** Cinematic hold: once a flight lands, the camera slowly drifts around its target (any mouse input stops it). */
+  cinematic: boolean;
   fps: number;
   rightPanelOpen: boolean;
   /** "auto" (a machine was just clicked) shows the Process tab. */
@@ -79,6 +83,7 @@ export const useUi = create<UiState>((set, get) => ({
   showPins: true,
   showTechnicians: true,
   cameraGoal: { preset: "overview", nonce: 0 },
+  cinematic: false,
   fps: 0,
   rightPanelOpen: true,
   rightTab: "process",

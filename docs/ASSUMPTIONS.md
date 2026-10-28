@@ -84,7 +84,7 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
     (13 in total). Around the campus the 3D scene draws a procedural city (street grid, houses, mid-rise
     offices, a park, traffic, pedestrians, clouds, aircraft); it is ambience driven by wall-clock time, while
     window / street lighting, sun and moon follow the simulation clock.
-28. **Employees are simulated people.** Prasad, Vaseem, Yasir, Kishore, Guru and Mano (`three/office.ts`)
+28. **Employees are simulated people.** Prasath, Vaseem, Yasar, Kishore, Guru and Mano (`three/office.ts`)
     follow a weekday schedule derived from the sim clock only (no stored state): arrive from the street,
     take the glass lift, sit at their desk, leave. Kishore is the seeded `supervisor` user ("Kishore") and
     works at a BMS console; the supervisor actions of the autopilot and the guided demo are his. Other desks
@@ -96,3 +96,16 @@ Recorded whenever the master prompt left a choice open. Numbered so code comment
 29. **No time-of-day.** The scene is always noon, staff are always at their desks, technicians are always on
     shift (`dispatch.on_shift` is always true) and the header shows no clock. The simulation clock still
     exists (every timestamp comes from it) but it is an internal detail, not something the demo asks you to read.
+
+30. **Load-slope cap is per metric, and the demo's one-minute run (`demo/walkthrough.py`).**
+    The detector's load baseline keeps its slope in `[0, b_max]`. Vibration (mm/s) keeps the cap of 6.0 per unit
+    load; temperature (°C) and motor current (A) use no upper cap, because their real slopes are larger (fan
+    ≈ 10 A, pump ≈ 18 A, chiller ≈ 60 A per unit load). With the vibration cap applied to them, their baselines
+    were wrong once the load left the early-morning range they were learned in, so a healthy repaired machine
+    could fail the verification "corroborating metrics normal" rule on current (3σ) and be sent back for rework.
+    No threshold or policy value changed. The verification rule "max z < 3.0 over 30 samples" is unchanged and
+    still trips by chance in about 4 % of healthy repairs; that is a legitimate rework, and the run plays it
+    (technician returns, second repair, second check) instead of stopping, extending its clock by 16 s per round.
+    The run also clears what earlier runs left behind (open jobs, wearing machines, technicians still out) before
+    it starts, orders and receives spare parts when stock is short, and refuses a second start while one is
+    playing (409 `run_in_progress`): only one simulation runs at a time.

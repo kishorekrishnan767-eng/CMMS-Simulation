@@ -8,19 +8,35 @@ test("an anomaly injected from the Machine tab plays the whole demonstration by 
   await page.goto("/sim");
   // nobody is "not in yet": the product has no working day
   await expect(page.getByTestId("people-list")).not.toContainText("not in yet");
-  await page.getByTestId("role-switcher").click();
-  await page.getByTestId("login-operator").click();
   await page.getByTestId("tree-AHU-02-FAN-01").click();
+  // clicking a machine shows that machine's own data in the Process tab, and what the next minute will show
+  await expect(page.getByTestId("process-panel")).toContainText("AHU-02-FAN-01");
+  await expect(page.getByTestId("sensor-strip")).toBeVisible();
+  await expect(page.getByTestId("wt-plan")).toBeVisible();
   await page.getByTestId("tab-asset").click();
   await page.getByTestId("asset-inject").click();
 
-  // the right-hand tab switches to the process by itself and shows every step
+  // the right-hand tab switches to the process by itself and shows every step, on the one-minute clock
   await expect(page.getByTestId("process-panel")).toBeVisible();
+  await expect(page.getByTestId("wt-clock")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId("wt-steps")).toBeVisible({ timeout: 60_000 });
   await expect(page.getByTestId("wt-step-7")).toBeVisible();
   // no clicks from here on: every step must finish on its own, in order
   await expect(page.getByTestId("wt-step-7")).toHaveAttribute("data-state", "done", { timeout: 480_000 });
   for (let n = 1; n <= 7; n++) await expect(page.getByTestId(`wt-step-${n}`)).toHaveAttribute("data-state", "done");
+  // the flow tells the whole story with arrows between the cards, ending with the machine back to normal
+  await expect(page.getByTestId("wt-flow-8")).toHaveAttribute("data-state", "done");
+  await expect(page.getByTestId("wt-clock")).toHaveAttribute("data-finished", "true");
+  // no sign-in, no approval to wait for: the request went to Kishore and he approved it by himself; nothing was refused
+  await expect(page.getByTestId("wt-step-4")).toContainText("Approved by Kishore");
+  await expect(page.getByTestId("wt-step-5")).toContainText("ETA");
+  await expect(page.getByTestId("process-panel")).not.toContainText("refused");
+  const denied = await call(request, "admin", "get", "/api/audit-logs?outcome=DENIED&limit=5");
+  expect(denied.body.total).toBe(0);
+  // after step 7 the camera returns to the whole building and the tab is ready for the next machine
+  await expect(page.getByTestId("wt-start")).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByTestId("wt-last")).toContainText("Ready for the next one");
+  expect(await twin(page, (w) => w.__twin.ui.getState().cameraGoal.preset)).toBe("overview");
 
   const state = await (await request.get(`${API}/api/walkthrough/state`)).json();
   expect(state.error).toBeNull();

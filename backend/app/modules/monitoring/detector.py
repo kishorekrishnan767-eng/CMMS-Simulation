@@ -53,6 +53,7 @@ WATCH_EXIT_CONSEC = 5
 CLEAR_CONSEC = 10
 LOAD_STD_MIN = 0.02        # load spread (std) below which the slope b is shrunk toward its prior
 GENERIC_B_PRIOR = 1.0      # mm/s per unit load: vibration generally rises with speed
+VIBRATION_B_MAX = 6.0      # mm/s per unit load: the largest believable vibration-vs-load slope (vibration only)
 SEVERITY_RANK = {"NONE": 0, "LOW": 1, "MEDIUM": 2, "HIGH": 3, "CRITICAL": 4}
 SEVERITY_BY_RANK = {v: k for k, v in SEVERITY_RANK.items()}
 
@@ -93,14 +94,23 @@ class Baseline:
     the load barely varies, so the slope b is poorly identified and the baseline drifts as soon as the
     window freezes during WATCH. b is therefore fitted on a longer healthy history (up to 24 h, one
     sample in five) while the intercept a and σ still come from the 120-sample window.
+
+    The fitted slope is kept in ``[0, b_max]``. ``b_max`` is metric-specific: vibration is in mm/s and
+    never rises faster than ``VIBRATION_B_MAX`` per unit load, so it is capped there. Temperature (°C) and
+    motor current (A) have no such physical cap in these units (a chiller draws ~60 A per unit load, a fan
+    ~10 A, a fan's bearing temperature rises ~12 °C): capping them at the vibration limit gave a baseline that
+    was wrong as soon as the load left the range it was learned in, so a healthy, repaired machine could be
+    3σ "abnormal" on current at higher load and fail verification. Those channels therefore use
+    ``b_max=None`` (only ``b ≥ 0``); the ridge shrinkage (see ``_ridge_b``) still guards a flat load.
     """
 
     LONG = 288          # 24 h at one stored sample per 5 minutes
     LONG_STRIDE = 5
     LONG_MIN = 40
 
-    def __init__(self, mem: dict[str, Any] | None = None) -> None:
+    def __init__(self, mem: dict[str, Any] | None = None, b_max: float | None = VIBRATION_B_MAX) -> None:
         mem = mem or {}
+        self.b_max = b_max
         self.window: deque[tuple[float, float]] = deque(((float(a), float(b)) for a, b in mem.get("window", [])), maxlen=WINDOW)
         self.long: deque[tuple[float, float]] = deque(((float(a), float(b)) for a, b in mem.get("long", [])), maxlen=self.LONG)
         self.n_added: int = int(mem.get("n_added", 0))
@@ -132,7 +142,8 @@ class Baseline:
             self._dirty = False
             return
         src = self.long if len(self.long) >= self.LONG_MIN else self.window
-        self.b = max(0.0, min(6.0, self._ridge_b(src, self.b)))
+        b = self._ridge_b(src, self.b)
+        self.b = max(0.0, b if self.b_max is None else min(self.b_max, b))
         arr = np.asarray(self.window)
         load, v = arr[:, 0], arr[:, 1]
         a = float(v.mean() - self.b * load.mean())
@@ -187,7 +198,7 @@ class ResidualTracker:
 
     def __init__(self, memory: dict[str, Any] | None = None) -> None:
         mem = memory or {}
-        self.baseline = Baseline(mem.get("baseline"))
+        self.baseline = Baseline(mem.get("baseline"), b_max=None)  # °C / A per unit load: not capped like mm/s
         self.recent_z: deque[float] = deque((float(x) for x in mem.get("recent_z", [])), maxlen=5)
         self.last_z: float = float(mem.get("last_z", 0.0))
 

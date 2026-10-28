@@ -6,7 +6,8 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { useAssets, useWorkOrders } from "../api/queries";
 import type { Asset } from "../api/types";
 import { useUi, type CameraGoal } from "../store/ui";
-import { explodeOffset, floorY } from "./constants";
+import { FLOOR_H, explodeOffset, floorY } from "./constants";
+import { KISHORE } from "./office";
 import { player } from "./player";
 import { techWorld } from "./Technicians";
 
@@ -35,6 +36,12 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
       return { pos: v(24, floorY(6) + 13 + explodeOffset(6, explode), 24), target: v(0, floorY(6) + 1.5 + explodeOffset(6, explode), -3), cutaway: null };
     case "plant":
       return { ...basementPose(-1, 0, explode), pos: v(12, floorY(-1) + 19, 24) };
+    case "kishore": {
+      // over Kishore's shoulder at his BMS console (Floor 3): him, his screens and the video wall
+      const y = floorY(3) + explodeOffset(3, explode);
+      const s = KISHORE.seat;
+      return { pos: v(s.sx + 2.8, y + 2.9, s.sz + 3.6), target: v(s.sx - 0.3, y + 1.15, s.sz - 1.2), cutaway: 3 };
+    }
     case "bms": {
       // Floor 3 control room seen from the front, floors above lifted off
       const y = floorY(3) + explodeOffset(3, explode);
@@ -85,6 +92,18 @@ export function presetPose(goal: CameraGoal, assets: Asset[], explode: number): 
     default:
       return { pos: v(78, 52, 92), target: v(0, 8, 4), cutaway: null };
   }
+}
+
+/**
+ * Where the follow camera sits relative to the person it trails: 6.5 m towards the building's centre and 7.5 m up,
+ * so it looks out at them from inside (never from behind the facade, its signs or the street), with the floors
+ * above cut away. offset = 6.5 · normalize(−x, −z) + (0, 7.5, 0); a person at the centre gets a fixed diagonal.
+ */
+function followOffsetFor(p: THREE.Vector3): THREE.Vector3 {
+  const len = Math.hypot(p.x, p.z);
+  const dx = len > 1 ? -p.x / len : 0.6;
+  const dz = len > 1 ? -p.z / len : 0.8;
+  return v(dx * 6.5, 7.5, dz * 6.5);
 }
 
 /** easeInOutCubic: slow start, fast middle, gentle landing. */
@@ -148,7 +167,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
       fromTarget: c.target.clone(),
       to: pose,
       t: 0,
-      duration: THREE.MathUtils.clamp(0.9 + dist / 60, 0.9, 2.2),
+      duration: goal.duration ?? THREE.MathUtils.clamp(0.9 + dist / 60, 0.9, 2.2),
       arc: Math.min(10, dist * 0.12),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +179,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
     const cancel = () => {
       flight.current = null;
       followId.current = null;
-      useUi.getState().set({ following: null });
+      useUi.getState().set({ following: null, cinematic: false });
     };
     c.addEventListener("start", cancel);
     return () => c.removeEventListener("start", cancel);
@@ -177,7 +196,7 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
       if (follow) {
         // keep re-aiming at the moving technician while flying in
         f.to.target.copy(follow).add(v(0, 0.2, 0));
-        f.to.pos.copy(follow).add(followOffset.current);
+        f.to.pos.copy(follow).add(goal.preset === "follow" ? followOffsetFor(follow) : followOffset.current);
       }
       f.t = Math.min(1, f.t + dt / f.duration);
       const e = ease(f.t);
@@ -186,12 +205,25 @@ export function CameraRig({ orbit = false, orbitSpeed = 0.35 }: { orbit?: boolea
       c.target.lerpVectors(f.fromTarget, f.to.target, e);
       if (f.t >= 1) flight.current = null;
     } else if (follow) {
-      const k = 3;
+      const k = 2.2;
       const tgt = follow.clone().add(v(0, 0.2, 0));
-      const pos = follow.clone().add(followOffset.current);
+      const pos = follow.clone().add(goal.preset === "follow" ? followOffsetFor(follow) : followOffset.current);
       c.target.set(THREE.MathUtils.damp(c.target.x, tgt.x, k, dt), THREE.MathUtils.damp(c.target.y, tgt.y, k, dt), THREE.MathUtils.damp(c.target.z, tgt.z, k, dt));
       camera.position.set(THREE.MathUtils.damp(camera.position.x, pos.x, k, dt), THREE.MathUtils.damp(camera.position.y, pos.y, k, dt), THREE.MathUtils.damp(camera.position.z, pos.z, k, dt));
     }
+    // the floor the followed person is on is the floor shown: floors above it are cut away, so a technician
+    // walking from the ground-floor crew room down to the basement plant room is never hidden by a slab
+    if (follow && useUi.getState().explode < 0.02) {
+      // ceil: while riding the lift between two floors, the upper one stays (so he is never hidden in the cab)
+      const want = Math.ceil((follow.y - 1) / FLOOR_H - 0.02);
+      const ui = useUi.getState();
+      if (ui.cutaway !== want) ui.set({ cutaway: want });
+    }
+    // cinematic hold: a slow drift around the target once the flight has landed (≈ 2.7 min per turn)
+    const ui = useUi.getState();
+    const drift = ui.cinematic && !flight.current && !follow && !camState.fpv && !ui.reducedMotion;
+    c.autoRotate = orbit || drift;
+    c.autoRotateSpeed = orbit ? orbitSpeed * 4 : 0.45;
     camState.flying = flight.current !== null;
     if (!camState.fpv) c.update();
   });

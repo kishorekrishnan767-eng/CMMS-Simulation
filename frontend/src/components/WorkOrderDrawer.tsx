@@ -3,7 +3,6 @@ import { Area, AreaChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tool
 import { api } from "../api/client";
 import { useCandidates, useTelemetry, useVerification, useWorkOrder } from "../api/queries";
 import type { WorkOrderDetail } from "../api/types";
-import { useSession } from "../store/session";
 import RiskBreakdown from "./RiskBreakdown";
 import { Drawer, ErrorState, Loading, PriorityBadge, StatusBadge, fmtMin, fmtTime, useAct } from "./ui";
 
@@ -12,7 +11,6 @@ const ACTION_LABEL: Record<string, string> = {
   approve: "Approve", reject: "Reject", cancel: "Cancel", assign: "Assign", hold: "Put on hold", resume: "Resume", start: "Start work",
   complete: "Complete work", verify: "Verify", close: "Close", restart: "Restart (rework)", acknowledge_escalation: "Acknowledge escalation",
 };
-const ALL_ACTIONS = ["approve", "reject", "cancel", "assign", "hold", "resume", "start", "complete", "verify", "close", "restart"];
 const NEEDS_REASON = new Set(["reject", "cancel", "hold"]);
 
 function BeforeAfter({ wo }: { wo: WorkOrderDetail }) {
@@ -40,7 +38,6 @@ function BeforeAfter({ wo }: { wo: WorkOrderDetail }) {
 }
 
 export default function WorkOrderDrawer({ id, onClose }: { id: number | null; onClose: () => void }) {
-  const me = useSession((s) => s.me);
   const { data: wo, error, refetch } = useWorkOrder(id);
   const { run, busy } = useAct();
   const [reason, setReason] = useState("");
@@ -48,7 +45,6 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
   const [parts, setParts] = useState<Record<string, number>>({});
   const [closure, setClosure] = useState<Record<string, boolean>>({});
   const [outcome, setOutcome] = useState("auto");
-  const [showAll, setShowAll] = useState(false);
   const canAssign = !!wo && ["OPEN"].includes(wo.status);
   const { data: cands } = useCandidates(id, canAssign);
   const verifying = !!wo && ["COMPLETED", "VERIFIED", "REWORK_REQUIRED"].includes(wo.status);
@@ -93,7 +89,7 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           <p className="whitespace-pre-line text-sm text-muted">{wo.description}</p>
 
           <section className="rounded-md border border-line p-3">
-            <div className="h-section mb-2">Actions {me ? <span className="normal-case text-muted">— you are {me.role}</span> : null}</div>
+            <div className="h-section mb-2">Actions</div>
             <div className="mb-2 flex items-center gap-2">
               <input className="input" placeholder="Reason / note (required to reject, cancel, hold, or fail)" value={reason} onChange={(e) => setReason(e.target.value)} aria-label="Reason or note" />
             </div>
@@ -103,18 +99,8 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
                   {ACTION_LABEL[a] ?? a}
                 </button>
               ))}
-              {allowed.size === 0 && <span className="text-xs text-muted">No actions are available to your role in this state.</span>}
+              {allowed.size === 0 && <span className="text-xs text-muted">Nothing to do here in this state: the simulated crew carries the job on.</span>}
             </div>
-            <button className="mt-2 text-xs text-accent hover:underline" onClick={() => setShowAll((v) => !v)}>
-              {showAll ? "Hide" : "Try any action — the backend decides (demonstrates 403 / 409 + audit)"}
-            </button>
-            {showAll && (
-              <div className="mt-2 flex flex-wrap gap-1.5" data-testid="wo-try-all">
-                {ALL_ACTIONS.filter((a) => a !== "assign").map((a) => (
-                  <button key={a} className="btn btn-sm" disabled={busy} onClick={() => doAction(a)} data-testid={`try-${a}`}>{ACTION_LABEL[a]}</button>
-                ))}
-              </div>
-            )}
             {allowed.has("complete") && (
               <div className="mt-3 space-y-2 rounded border border-line p-2 text-xs">
                 <label className="block">Findings (required)

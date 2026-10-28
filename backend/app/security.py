@@ -27,7 +27,7 @@ PBKDF2_ITERATIONS = 200_000
 PERMISSIONS: dict[str, frozenset[str]] = {
     "sim.control": frozenset({"ADMIN", "SUPERVISOR", "OPERATOR"}),
     "sim.fault": frozenset({"ADMIN", "SUPERVISOR", "OPERATOR"}),
-    "sim.reset": frozenset({"ADMIN"}),
+    "sim.reset": frozenset({"ADMIN", "SUPERVISOR"}),  # the app runs as Kishore (supervisor), who may reset the simulation
     "ingest": frozenset({"ADMIN", "OPERATOR", "SUPERVISOR"}),
     "wo.create": frozenset({"ADMIN", "OPERATOR", "SUPERVISOR"}),
     "wo.approve": frozenset({"SUPERVISOR"}),

@@ -1,6 +1,6 @@
 import { CREW_ROOM, CORE, LIFT } from "./constants";
 import { EXTENT, carParkSpots, cells } from "./cityMap";
-import { BMS_ROOM, BOARDROOM, EXEC_OFFICES, KISHORE, MEETING_NE, SERVER_ROOM, WORKSTATIONS } from "./office";
+import { BMS_ROOM, BOARDROOM, COUPLES_ROOM, EXEC_OFFICES, KISHORE, MEETING_NE, SERVER_ROOM, WORKSTATIONS } from "./office";
 import type { StaffPose } from "./staff";
 import { vehicle } from "./vehicle";
 
@@ -78,6 +78,7 @@ export function obstacles(level: number): Rect[] {
   for (const w of WORKSTATIONS[l] ?? []) out.push({ x0: w.dx - 0.85, x1: w.dx + 0.85, z0: w.dz - 0.45, z1: w.dz + 0.45 });
   out.push({ x0: CORE.x - CORE.w / 2, x1: CORE.x + CORE.w / 2, z0: CORE.z - CORE.d / 2, z1: CORE.z + CORE.d / 2 });
   if (l === 1 || l === 4) out.push(...roomWalls(MEETING_NE, { side: "s", at: 8.7, w: 1.4 }));
+  if (l === 1) out.push(...roomWalls(COUPLES_ROOM, { side: "n", at: COUPLES_ROOM.doorX, w: 1.4 }));
   if (l === 2) out.push(...roomWalls(SERVER_ROOM, { side: "e", at: 10, w: 1.4 }));
   if (l === 3) {
     out.push(...roomWalls(BMS_ROOM, { side: "e", at: 10.6, w: 2.0 }, ["s", "w", "n"]));

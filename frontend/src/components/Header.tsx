@@ -1,74 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { NavLink, Link } from "react-router-dom";
 import { api } from "../api/client";
-import { useDemoUsers } from "../api/queries";
-import type { Me, SimState } from "../api/types";
+import type { SimState } from "../api/types";
 import { APP_NAME } from "../config";
 import { useLive } from "../store/live";
-import { useSession } from "../store/session";
 import { useUi } from "../store/ui";
 import { Simulated, useAct } from "./ui";
 
+/** Run / pause the simulated building. There is no sign-in or role to choose: the simulation runs as Kishore. */
 function SimControls() {
   const clock = useLive((s) => s.clock);
   const { run, busy } = useAct();
-  const me = useSession((s) => s.me);
-  const can = !!me && ["ADMIN", "OPERATOR", "SUPERVISOR"].includes(me.role);
   const toggle = () => run(() => api.post<SimState>(clock.running ? "/api/simulation/pause" : "/api/simulation/start"));
   return (
     <div className="flex items-center gap-1.5" data-testid="sim-controls">
-      <button className={`btn btn-sm min-w-[64px] ${clock.running ? "" : "btn-primary"}`} onClick={toggle} disabled={busy || !can} title={can ? "" : "Sign in as Operator, Supervisor or Admin to control the simulation"} aria-label={clock.running ? "Pause simulation" : "Start simulation"} data-testid="sim-toggle">
+      <button className={`btn btn-sm min-w-[64px] ${clock.running ? "" : "btn-primary"}`} onClick={toggle} disabled={busy} aria-label={clock.running ? "Pause simulation" : "Start simulation"} data-testid="sim-toggle">
         {clock.running ? "Pause" : "Run"}
       </button>
-    </div>
-  );
-}
-
-function RoleSwitcher() {
-  const me = useSession((s) => s.me);
-  const [open, setOpen] = useState(false);
-  const { data: users } = useDemoUsers();
-  const ref = useRef<HTMLDivElement>(null);
-  const { run } = useAct();
-  useEffect(() => {
-    const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-  const login = async (username: string, password: string) => {
-    const r = await run(() => api.post<{ access_token: string; user: Me }>("/api/auth/login", { username, password }), undefined);
-    if (r) {
-      useSession.getState().login(r.access_token, r.user);
-      setOpen(false);
-    }
-  };
-  return (
-    <div className="relative" ref={ref}>
-      <button className="btn btn-sm" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} data-testid="role-switcher">
-        <span className="h-2 w-2 rounded-full bg-ok" />
-        {me ? `${me.display_name.split(" ")[0]} · ${me.role}` : "Sign in"}
-      </button>
-      {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 rounded-md border border-line bg-panel p-2 shadow-lg" role="menu">
-          <div className="px-2 pb-1 pt-1 text-[11px] uppercase tracking-wider text-muted">Demo users — permissions are enforced by the backend</div>
-          {(users ?? []).map((u) => (
-            <button key={u.username} role="menuitem" onClick={() => login(u.username, u.password)} data-testid={`login-${u.username}`}
-              className={`flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-panel2 ${me?.username === u.username ? "bg-panel2" : ""}`}>
-              <span>
-                {u.display_name}
-                <span className="block text-[11px] text-muted">{u.username}{u.technician_id ? ` · ${u.technician_id}` : ""}</span>
-              </span>
-              <span className="badge badge-muted">{u.role}</span>
-            </button>
-          ))}
-          {me && (
-            <button className="btn btn-sm mt-1 w-full" onClick={() => { useSession.getState().logout(); setOpen(false); }}>
-              Sign out
-            </button>
-          )}
-          <div className="px-2 pt-2 text-[11px] text-muted">Demo password for all users: <code>demo1234</code></div>
-        </div>
-      )}
     </div>
   );
 }
@@ -104,7 +52,6 @@ export default function Header() {
             {connected ? "connected" : "offline"}
           </span>
           <SimControls />
-          <RoleSwitcher />
           <button className="btn btn-sm hidden sm:inline-flex" aria-label="Toggle light or dark theme" onClick={() => useUi.getState().set({ theme: theme === "dark" ? "light" : "dark" })}>
             {theme === "dark" ? "☀" : "☾"}
           </button>

@@ -6,7 +6,7 @@ import Header from "./components/Header";
 import Toasts from "./components/Toasts";
 import { Loading } from "./components/ui";
 import { useLiveSocket } from "./hooks/useLiveSocket";
-import { useSession } from "./store/session";
+import { KISHORE, useSession } from "./store/session";
 import { useUi } from "./store/ui";
 
 const Landing = lazy(() => import("./pages/Landing"));
@@ -25,6 +25,7 @@ export default function App() {
   const theme = useUi((s) => s.theme);
   const reduced = useUi((s) => s.reducedMotion);
   const token = useSession((s) => s.token);
+  const who = useSession((s) => s.me?.username);
   const loc = useLocation();
 
   useEffect(() => {
@@ -32,13 +33,14 @@ export default function App() {
     document.documentElement.dataset.reducedMotion = String(reduced);
   }, [theme, reduced]);
 
-  // Demo convenience: start as the Operator so the simulation can be controlled straight away.
+  // It is a simulation: there is no sign-in and no role to pick. The app always acts as Kishore, the BMS
+  // supervisor (an older session as anyone else is replaced); the simulated crew does everyone else's work.
   useEffect(() => {
-    if (token) return;
-    api.post<{ access_token: string; user: Me }>("/api/auth/login", { username: "operator", password: "demo1234" })
+    if (token && who === KISHORE) return;
+    api.post<{ access_token: string; user: Me }>("/api/auth/login", { username: KISHORE, password: "demo1234" })
       .then((r) => useSession.getState().login(r.access_token, r.user))
       .catch(() => undefined);
-  }, [token]);
+  }, [token, who]);
 
   return (
     <>

@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { api } from "../api/client";
 import { useAnomaly, useAnomalies, useAsset, useAutopilot, useSim, useWalkthrough, useWorkOrders } from "../api/queries";
 import { useLive } from "../store/live";
-import { useSession } from "../store/session";
 import { useUi } from "../store/ui";
 import TelemetryChart, { METRIC_LABEL } from "./TelemetryChart";
 import { startWalkthrough } from "./walkthroughApi";
@@ -33,32 +32,34 @@ function LiveValues({ assetId }: { assetId: string }) {
  *  Both go through the normal API, so permissions, audit and the work-order workflow all apply. */
 function AssetActions({ assetId, hasAnomaly, hasWorkOrder }: { assetId: string; hasAnomaly: boolean; hasWorkOrder: boolean }) {
   const { data: sim } = useSim();
-  const me = useSession((s) => s.me);
   const { run, busy } = useAct();
-  const can = !!me && ["ADMIN", "OPERATOR", "SUPERVISOR"].includes(me.role);
   const wearing = !!sim?.active_faults.some((f) => f.asset_id === assetId && f.fault_type === "BEARING_WEAR");
   const { data: ap } = useAutopilot();
   const { data: wt } = useWalkthrough();
   const repairing = !!ap?.expedited?.includes(assetId);
-  const why = can ? "" : "Sign in as Operator, Supervisor or Admin";
   const canRepair = wearing || hasAnomaly || hasWorkOrder;
-  if (wt?.asset_id === assetId) {
+  const playing = !!wt?.busy; // one simulation at a time
+  const wait = "A simulation is playing. Only one runs at a time: wait for it to finish (about a minute).";
+  if (playing && wt?.asset_id === assetId) {
     return (
       <section className="rounded-md border border-line p-3 text-[12.5px]" data-testid="asset-actions">
-        This machine is in the step-by-step demo. <button className="text-accent hover:underline" onClick={() => useUi.getState().set({ rightTab: "process" })}>Open Process</button>
+        The 1-minute anomaly simulation is playing on this machine. <button className="text-accent hover:underline" onClick={() => useUi.getState().set({ rightTab: "process" })}>Open Process</button>
       </section>
     );
   }
   return (
     <section className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3" data-testid="asset-actions">
-      <button className="btn btn-sm" disabled={!can || busy || wearing || hasAnomaly || hasWorkOrder} title={why || "Start a simulated bearing wear on this machine and watch it being found and fixed"}
+      <button className="btn btn-sm" disabled={busy || playing}
+        title={playing ? wait : canRepair ? "Start a fresh 1-minute simulation on this machine. Leftovers of earlier runs are cleared first." : "Start a simulated bearing wear on this machine and watch it being found and fixed, in one minute"}
         onClick={() => run(() => startWalkthrough(assetId)).then((r) => { if (r) useUi.getState().set({ rightPanelOpen: true, rightTab: "process" }); })} data-testid="asset-inject">
         ⚠ Inject anomaly
       </button>
-      <button className="btn btn-sm btn-primary" disabled={!can || busy || !canRepair || repairing} title={why || (canRepair ? "The crew repairs it through the normal work-order workflow" : "Nothing to repair on this asset")}
+      <button className="btn btn-sm btn-primary" disabled={busy || playing || !canRepair || repairing}
+        title={playing ? wait : canRepair ? "The crew repairs it through the normal work-order workflow" : "Nothing to repair on this asset"}
         onClick={() => run(() => api.post("/api/autopilot/repair", { asset_id: assetId }), `Repair of ${assetId} started`)} data-testid="asset-repair">
         {repairing ? "Repairing…" : "🔧 Repair"}
       </button>
+      {playing && <span className="basis-full text-[11px] text-muted">{wait}</span>}
       {repairing && <span className="basis-full text-[11px] text-muted">The crew is on it. Keep the clock running.</span>}
     </section>
   );

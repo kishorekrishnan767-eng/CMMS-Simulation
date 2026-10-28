@@ -17,7 +17,14 @@ export interface SimClock {
   seed: number;
   profile: string;
   repairEffectiveness: number;
+  /** While paused but stepped (the one-minute run): the time shown when the newest step arrived, and how long to
+   *  glide from it to `simMs` (the interval since the previous step). 0 = no glide. */
+  glideFrom?: number;
+  glideMs?: number;
 }
+
+/** A gap larger than this (sim ms) is a reset or a jump, not a step: show it at once instead of gliding. */
+const GLIDE_MAX_SIM_MS = 30 * 60_000;
 
 interface LiveState {
   connected: boolean;
@@ -122,11 +129,21 @@ export const useLive = create<LiveState>((set, get) => ({
         values[r.asset_id] = { ...(values[r.asset_id] ?? {}), [r.metric]: r.value };
       }
       patch.values = values;
-      patch.clock = { ...s.clock, simMs: parseMs(p.to), wallAt: now };
+      const to = parseMs(p.to);
+      if (s.clock.running) {
+        patch.clock = { ...s.clock, simMs: to, wallAt: now, glideFrom: undefined, glideMs: 0 };
+      } else {
+        // paused but stepped (the one-minute run advances the clock a minute at a time): glide from what is on
+        // screen now to the new time over the interval since the previous step, so people walk instead of jump
+        const shown = simNowMs();
+        const gap = to - shown;
+        const glide = gap > 0 && gap <= GLIDE_MAX_SIM_MS ? Math.min(2500, Math.max(120, now - s.clock.wallAt)) : 0;
+        patch.clock = { ...s.clock, simMs: to, wallAt: now, glideFrom: glide ? shown : undefined, glideMs: glide };
+      }
     } else if (e.event_type === "HealthStateChanged") {
       patch.health = { ...s.health, [p.asset_id]: p.to as Health };
     } else if (e.event_type === "SimulationControl") {
-      patch.clock = { ...s.clock, simMs: s.clock.simMs + (s.clock.running ? (now - s.clock.wallAt) * s.clock.speed : 0), wallAt: now, running: !!p.running, speed: p.speed ?? s.clock.speed };
+      patch.clock = { ...s.clock, simMs: s.clock.simMs + (s.clock.running ? (now - s.clock.wallAt) * s.clock.speed : 0), wallAt: now, running: !!p.running, speed: p.speed ?? s.clock.speed, glideFrom: undefined, glideMs: 0 };
     }
 
     patch.layerCounts = { ...s.layerCounts, [e.layer]: (s.layerCounts[e.layer] ?? 0) + 1 };
@@ -149,10 +166,16 @@ export const useLive = create<LiveState>((set, get) => ({
   dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
 
-/** Current sim time in ms, interpolated between server updates while the simulation is running. */
+/** Current sim time in ms: extrapolated while the simulation runs; while it is paused but stepped (the one-minute
+ *  run), glided linearly from the previous step to the newest one so motion stays smooth. */
 export function simNowMs(): number {
   const { clock } = useLive.getState();
-  if (!clock.running) return clock.simMs;
+  if (!clock.running) {
+    // glide between steps: from the time shown when the step arrived to the step's time, linearly
+    if (clock.glideFrom === undefined || !clock.glideMs) return clock.simMs;
+    const f = Math.min(1, (performance.now() - clock.wallAt) / clock.glideMs);
+    return clock.glideFrom + (clock.simMs - clock.glideFrom) * f;
+  }
   return clock.simMs + (performance.now() - clock.wallAt) * clock.speed;
 }
 

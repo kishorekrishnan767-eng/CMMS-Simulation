@@ -5,7 +5,6 @@ import type { SimState } from "../api/types";
 import { PageShell, fmtTime, useAct, Disclaimer } from "../components/ui";
 import { SIM_SPEEDS } from "../config";
 import { useLive } from "../store/live";
-import { useSession } from "../store/session";
 
 const SENSOR_FAULTS: [string, string][] = [
   ["flatline", "Flatline (sensor stuck)"], ["spike", "Spike (single outlier)"], ["dropout", "Dropout (missing samples)"],
@@ -17,7 +16,6 @@ export default function ControlPage() {
   const { data: assets } = useAssets();
   const { data: rej } = useRejected();
   const clock = useLive((s) => s.clock);
-  const me = useSession((s) => s.me);
   const { run, busy } = useAct();
   const [asset, setAsset] = useState("AHU-02-FAN-01");
   const [sensorFault, setSensorFault] = useState("duplicate");
@@ -32,7 +30,6 @@ export default function ControlPage() {
     <PageShell title="Simulation control" subtitle="Drive the simulated world. Everything here goes through the same API the rest of the product uses; the simulator only publishes telemetry — it never creates alerts or work orders.">
       <div className="mb-4 flex items-center gap-2">
         <span className="badge badge-watch">Simulated</span>
-        {!me && <span className="text-xs text-bad">Sign in (Operator / Supervisor / Admin) to change the simulation.</span>}
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="card p-4">
@@ -69,10 +66,10 @@ export default function ControlPage() {
               <select className="input mt-1" value={profile} onChange={(e) => setProfile(e.target.value)}><option value="demo">demo (fault matures in 1.5 h)</option><option value="realistic">realistic (4 h)</option></select>
             </label>
           </div>
-          <button className="btn btn-danger mt-3" disabled={busy || me?.role !== "ADMIN"} onClick={() => run(() => api.post("/api/simulation/reset", { seed: seed === "" ? undefined : seed, profile }), "Simulation reset and 6 h of healthy history backfilled")} data-testid="ctl-reset">
-            Reset (Admin only)
+          <button className="btn btn-danger mt-3" disabled={busy} onClick={() => run(() => api.post("/api/simulation/reset", { seed: seed === "" ? undefined : seed, profile }), "Simulation reset and 6 h of healthy history backfilled")} data-testid="ctl-reset">
+            Reset
           </button>
-          <p className="mt-2 text-xs text-muted">Wipes work orders, anomalies, events and audit records, restarts the clock at the seed epoch and backfills six hours of healthy telemetry through the normal ingestion path. Same seed → identical run.{me?.role !== "ADMIN" && " Switch to the Admin user to enable this."}</p>
+          <p className="mt-2 text-xs text-muted">Wipes work orders, anomalies, events and audit records, restarts the clock at the seed epoch and backfills six hours of healthy telemetry through the normal ingestion path. Same seed → identical run.</p>
         </section>
 
         <section className="card p-4">

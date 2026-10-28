@@ -103,6 +103,30 @@ body {
 }
 .tech-msg b { display: block; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #1f5fbf; }
 .tech-msg[hidden] { display: none; }
+/* Kishore's approval card over his BMS console (one-minute run) */
+.kishore-card {
+  width: 236px; padding: 8px 10px; border-radius: 7px; font-size: 11px; line-height: 1.4; white-space: normal;
+  background: #fff; color: #1b1f24; border: 1px solid #d5dae0; border-top: 3px solid #1f5fbf;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.22); animation: msg-in 0.45s cubic-bezier(.2,.8,.2,1);
+}
+.kishore-card.approved { border-top-color: #2f9e5a; }
+.kishore-card .kc-head { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #1f5fbf; }
+.kishore-card.approved .kc-head { color: #2f9e5a; }
+.kishore-card .kc-title { margin-top: 2px; font-weight: 700; font-size: 12px; }
+.kishore-card .kc-sub { color: #5d6670; }
+.kishore-card ul { margin: 5px 0 0; padding: 0; list-style: none; }
+.kishore-card li { color: #8a929b; transition: color 0.4s; }
+.kishore-card li.ok { color: #1b1f24; }
+.kishore-card .kc-bar { margin-top: 6px; height: 4px; border-radius: 2px; background: #e4e8ec; overflow: hidden; }
+.kishore-card .kc-bar i { display: block; height: 100%; width: 100%; background: #1f5fbf; transform-origin: left; animation: kc-review 5s linear forwards; }
+@keyframes kc-review { from { transform: scaleX(0.04); } to { transform: scaleX(1); } }
+/* Process tab flow: the arrow between two steps; the live one pulses */
+.flow-arrow { display: flex; flex-direction: column; align-items: center; height: 18px; color: #9aa3ad; }
+.flow-arrow i { width: 2px; flex: 1; background: currentColor; border-radius: 1px; }
+.flow-arrow b { font-size: 9px; line-height: 9px; }
+.flow-arrow.done { color: #2f9e5a; }
+.flow-arrow.live { color: #1f5fbf; animation: flow-pulse 1.1s ease-in-out infinite; }
+@keyframes flow-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
 .wo-pin-chip { padding: 2px 7px; border-radius: 4px; font: 600 10px/1.4 ui-monospace, Consolas, monospace; white-space: nowrap; background: rgb(22 25 29 / 0.9); color: #fff; border-left: 3px solid; }
 .floor-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; white-space: nowrap; color: #fff; }
 .floor-badge.bad { background: #c4302b; }

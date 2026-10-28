@@ -77,7 +77,7 @@ export default function SimPage() {
           }}
           data-testid="watch-demo"
         >
-          ▶ Step-by-step demo
+          ▶ 1-minute anomaly demo
         </button>
       )}
     </div>

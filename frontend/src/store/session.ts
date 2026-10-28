@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { Me } from "../api/types";
 
 const KEY = "twincmms.session";
+/** The one person the app acts as: Kishore, the BMS supervisor (username of the seeded user). */
+export const KISHORE = "supervisor";
 
 function load(): { token: string | null; me: Me | null } {
   try {

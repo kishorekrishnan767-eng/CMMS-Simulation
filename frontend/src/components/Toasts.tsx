@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useWalkthrough } from "../api/queries";
 import { useLive } from "../store/live";
 
 const COLORS = { info: "border-repair/60", warn: "border-watch/60", bad: "border-bad/70", ok: "border-ok/60" } as const;
@@ -6,13 +7,16 @@ const COLORS = { info: "border-repair/60", warn: "border-watch/60", bad: "border
 export default function Toasts() {
   const toasts = useLive((s) => s.toasts);
   const dismiss = useLive((s) => s.dismissToast);
+  // while the one-minute run plays, the Process tab tells the story: only errors pop up over the cinematic view
+  const playing = !!useWalkthrough().data?.busy;
+  const shown = playing ? toasts.filter((t) => t.kind === "bad") : toasts;
   useEffect(() => {
     const timers = toasts.map((t) => window.setTimeout(() => dismiss(t.id), t.kind === "bad" ? 9000 : 5500));
     return () => timers.forEach(window.clearTimeout);
   }, [toasts, dismiss]);
   return (
     <div className="pointer-events-none fixed left-1/2 top-16 z-50 flex w-[min(92vw,380px)] -translate-x-1/2 flex-col gap-2" aria-live="polite" data-testid="toasts">
-      {toasts.slice(-3).map((t) => (
+      {shown.slice(-3).map((t) => (
         <div key={t.id} className={`toast glass pointer-events-auto rounded-md border-l-4 border px-3 py-2 shadow-xl ${COLORS[t.kind]}`} role="status">
           <div className="flex items-start justify-between gap-2">
             <div className="text-[13px] font-semibold">{t.title}</div>

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAnomaly, useAnomalies, useAsset, useProcedures, useRejected, useWalkthrough, useWorkOrder, useWorkOrders } from "../api/queries";
-import type { Asset, WalkthroughState } from "../api/types";
+import { useAsset, useProcedures, useWalkthrough, useWorkOrder, useWorkOrders } from "../api/queries";
+import type { Asset, WalkPhase, WalkthroughState } from "../api/types";
 import { GOLDEN_ASSET } from "../config";
-import { useDemoMode } from "../store/demoMode";
 import { useLive } from "../store/live";
 import { usePlayer } from "../store/player";
 import { useUi } from "../store/ui";
@@ -11,175 +10,74 @@ import { floorLabel } from "../three/constants";
 import { stepAt, workBegan } from "../three/techPath";
 import { fmtSensor, sensorName } from "./sensors";
 import { Empty, Loading, Progress, Simulated, parseIso, useAct, useSimNow } from "./ui";
-import { nextWalkthroughStep, resetWalkthrough, startWalkthrough } from "./walkthroughApi";
+import { resetWalkthrough, startWalkthrough } from "./walkthroughApi";
 
-const chip = (tone: "ok" | "bad" | "watch" | "muted", text: ReactNode) => <span className={`badge badge-${tone}`}>{text}</span>;
+/** m:ss on the one-minute clock. */
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+/** Plain words for the work-order priorities of the demo policy (P1 is the highest). */
+const PRIORITY_LABEL: Record<string, string> = { P1: "urgent", P2: "high", P3: "medium", P4: "low" };
+const priority = (p: unknown) => (typeof p === "string" && p ? `${p} (${PRIORITY_LABEL[p] ?? ""})` : "—");
+/** Seconds a finished run stays on screen before the tab is ready for the next one. */
+const BACK_TO_IDLE_MS = 10_000;
 
-/** Live value of every sensor of the machine (layer 1–2): always visible so each sensor can be followed. */
+/** The card a phase belongs to: 0 = the wear begins, 1–7 = the seven steps, 8 = back to normal. */
+const PHASE_CARD: Record<WalkPhase, number> = {
+  idle: -1, starting: 0, preparing: 0, wear: 0, readings: 1, prediction: 2, workorder: 3, approval: 4, approved: 4,
+  dispatch: 5, walking: 6, working: 6, rework: 7, verifying: 7, closing: 7, done: 8,
+};
+
+type CardState = "done" | "now" | "todo";
+interface CardDef { n: number; icon: string; title: string; layer: string; at: number | null }
+
+const chip = (text: ReactNode, tone: "ok" | "bad" | "watch" | "muted" | "info" = "muted") => <span className={`badge badge-${tone}`}>{text}</span>;
+
+/** Live value of every sensor of the machine: shown before a run, so you can see what is normal. */
 function SensorStrip({ asset }: { asset: Asset }) {
   const vals = useLive((s) => s.values[asset.id]) ?? {};
   return (
-    <div className="grid grid-cols-2 gap-1.5" data-testid="sensor-strip">
+    <div className="grid grid-cols-4 gap-1.5" data-testid="sensor-strip">
       {asset.sensors.map((s) => (
-        <div key={s.id} className="rounded-md border border-line bg-panel2 px-2.5 py-1.5">
-          <div className="text-[10.5px] uppercase tracking-wide text-muted">{sensorName(s.metric)}</div>
-          <div className="text-[15px] font-semibold tabular-nums">{fmtSensor(s.metric, vals[s.metric])}</div>
+        <div key={s.id} className="rounded-md border border-line bg-panel2 px-2 py-1.5">
+          <div className="truncate text-[10px] uppercase tracking-wide text-muted">{sensorName(s.metric)}</div>
+          <div className="text-[13px] font-semibold tabular-nums">{fmtSensor(s.metric, vals[s.metric])}</div>
         </div>
       ))}
     </div>
   );
 }
 
-/** What each finished step produced, per sensor where it applies. */
-function useStepData(asset: Asset, wt: WalkthroughState) {
-  const vals = useLive((s) => s.values[asset.id]) ?? {};
-  const { data: rej } = useRejected(asset.id);
-  const { data: anoms } = useAnomalies(undefined, asset.id);
-  const anomalyId = [...(anoms?.items ?? [])].sort((a, b) => b.id - a.id)[0]?.id ?? null;
-  const { data: anomaly } = useAnomaly(wt.stage >= 2 ? anomalyId : null);
-  const { data: list } = useWorkOrders(`&asset_id=${asset.id}`);
-  const woId = wt.stage >= 3 ? [...(list?.items ?? [])].sort((a, b) => b.id - a.id)[0]?.id ?? null : null;
-  const { data: wo } = useWorkOrder(woId);
-  const dups = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const r of rej?.items ?? []) if (r.reason === "DUPLICATE" && r.sensor_id) m[r.sensor_id] = (m[r.sensor_id] ?? 0) + 1;
-    return m;
-  }, [rej]);
-  return { vals, dups, anomaly, wo };
-}
-
-function Rows({ children }: { children: ReactNode }) {
-  return <ul className="mt-2 divide-y divide-line rounded-md border border-line text-[12.5px]">{children}</ul>;
-}
-function Row({ left, mid, right }: { left: ReactNode; mid?: ReactNode; right?: ReactNode }) {
+/** The one-minute clock, ticking smoothly between polls. */
+function RunClock({ wt }: { wt: WalkthroughState }) {
+  const base = useRef({ at: performance.now(), s: wt.elapsed_s });
+  const [, tick] = useState(0);
+  useEffect(() => {
+    base.current = { at: performance.now(), s: wt.elapsed_s };
+  }, [wt.elapsed_s]);
+  useEffect(() => {
+    if (!wt.busy) return;
+    const id = window.setInterval(() => tick((n) => n + 1), 250);
+    return () => window.clearInterval(id);
+  }, [wt.busy]);
+  const s = wt.busy ? Math.min(wt.budget_s * 1.2, base.current.s + (performance.now() - base.current.at) / 1000) : wt.elapsed_s;
+  const finished = wt.phase === "done" && !wt.busy;
   return (
-    <li className="flex items-center justify-between gap-2 px-2.5 py-1.5">
-      <span className="font-medium">{left}</span>
-      <span className="tabular-nums text-muted">{mid}</span>
-      <span className="min-w-[96px] text-right">{right}</span>
-    </li>
+    <section className="rounded-md border border-line px-3 py-2" data-testid="wt-clock" data-finished={finished}>
+      <div className="flex items-baseline justify-between">
+        <span className="text-[22px] font-semibold tabular-nums" data-testid="wt-elapsed">
+          {clock(s)}<span className="ml-1 text-[12px] font-normal text-muted">/ {clock(wt.budget_s)}</span>
+        </span>
+        <span className="text-[12px] text-muted">
+          {finished ? "✓ Finished" : wt.preparing ? "Getting ready…" : wt.busy ? <><i className="live-dot mr-1.5 inline-block h-2 w-2 rounded-full bg-accent" />Playing</> : wt.error ? "Stopped" : ""}
+        </span>
+      </div>
+      <div className="mt-1.5"><Progress value={s / Math.max(1, wt.budget_s)} tone={finished ? "ok" : "accent"} /></div>
+    </section>
   );
 }
 
-function Result({ n, asset, wt }: { n: number; asset: Asset; wt: WalkthroughState }) {
-  const { vals, dups, anomaly, wo } = useStepData(asset, wt);
-  const r = wt.results[String(n)] ?? {};
-  if (n === 1) {
-    const total = Object.values(dups).reduce((a, b) => a + b, 0);
-    return (
-      <>
-        <Rows>
-          {asset.sensors.map((s) => (
-            <Row key={s.id} left={sensorName(s.metric)} mid={fmtSensor(s.metric, vals[s.metric])}
-              right={dups[s.id] ? chip("ok", `${dups[s.id]} copy dropped`) : chip("muted", "no copies")} />
-          ))}
-        </Rows>
-        <p className="mt-1.5 text-[12px] text-muted">{total} repeated reading{total === 1 ? "" : "s"} dropped. One copy of each is kept.</p>
-      </>
-    );
-  }
-  if (n === 2 && anomaly) {
-    return (
-      <>
-        <Rows>
-          {asset.sensors.map((s) => {
-            const main = s.metric === anomaly.metric;
-            const also = anomaly.corroborating[s.metric]?.corroborates;
-            return (
-              <Row key={s.id} left={sensorName(s.metric)} mid={fmtSensor(s.metric, vals[s.metric])}
-                right={main ? chip("bad", `${anomaly.z.toFixed(1)}σ above normal`) : also ? chip("watch", "also off") : chip("ok", "normal")} />
-            );
-          })}
-        </Rows>
-        <p className="mt-1.5 text-[12px] text-muted" data-testid="wt-explanation">{anomaly.explanation}</p>
-      </>
-    );
-  }
-  if (n === 3 && wo) {
-    const ra = wo.risk_assessment;
-    return (
-      <div className="mt-2 rounded-md border border-line p-2.5 text-[12.5px]">
-        <div className="flex items-center justify-between">
-          <b className="mono">{wo.number}</b>
-          <span className="flex gap-1">{chip("watch", wo.priority)}{chip("muted", wo.status)}</span>
-        </div>
-        {ra && <div className="mt-1">Risk <b>{Math.round(ra.risk_score)}/100</b></div>}
-        <div className="mt-1 text-muted">
-          {Number(r.open_work_orders ?? 1)} work order · {wo.events.filter((e) => e.action === "EVIDENCE_ATTACHED").length} later alerts added to it · 0 duplicates
-        </div>
-      </div>
-    );
-  }
-  if (n === 4) {
-    return (
-      <Rows>
-        <Row left="Operator tries to approve" right={chip("bad", `refused (${r.operator_denied ?? 403})`)} />
-        <Row left="Kishore (supervisor) approves" right={chip("ok", "approved")} />
-      </Rows>
-    );
-  }
-  if (n === 5 && wo) {
-    return (
-      <div className="mt-2 rounded-md border border-line p-2.5 text-[12.5px]">
-        <div><b>{String(r.technician ?? wo.assigned_technician?.name ?? "")}</b> is on the way · about {String(r.travel_minutes ?? "?")} min</div>
-        <div className="mt-1 text-muted">Parts reserved: {wo.parts.map((p) => `${p.sku} × ${p.planned}`).join(", ") || "none"}</div>
-      </div>
-    );
-  }
-  if (n === 6) {
-    const ins = wo?.inspections[wo.inspections.length - 1];
-    return (
-      <div className="mt-2 rounded-md border border-line p-2.5 text-[12.5px]">
-        <div>{String(r.findings ?? ins?.findings ?? "")}</div>
-        {ins && <div className="mt-1 text-muted">Parts used: {ins.parts_used.map((p) => `${p.sku} × ${p.quantity}`).join(", ") || "none"}</div>}
-      </div>
-    );
-  }
-  if (n === 7) {
-    const v = wo?.verifications[wo.verifications.length - 1];
-    return (
-      <>
-        <Rows>
-          {(v?.criteria.criteria ?? []).map((c) => (
-            <Row key={c.name} left={c.label} mid={c.value == null ? "—" : c.value.toFixed(2)} right={chip(c.passed ? "ok" : "bad", c.passed ? "pass" : "fail")} />
-          ))}
-          <Row left="Technician verifies own work" right={chip("bad", `refused (${r.own_work_denied ?? 403})`)} />
-        </Rows>
-        <p className="mt-1.5 text-[12px] text-muted">{r.outcome === "CLOSED" ? "Verified by an independent check. Work order closed. The machine is back to normal." : "Verification failed. The job goes back for rework."}</p>
-      </>
-    );
-  }
-  return <Loading label="Loading…" />;
-}
-
-/** Step 4 needs Kishore: in automatic mode he approves by himself; or take control and walk him to his desk. */
-function KishoreControls({ onApprove, disabled, auto }: { onApprove: () => void; disabled: boolean; auto: boolean }) {
-  const active = usePlayer((s) => s.active);
-  return (
-    <div className="mt-2 space-y-1.5">
-      {active ? (
-        <>
-          <p className="text-[12.5px]">You are Kishore. Look with the mouse, walk with <b>W A S D</b>, take the glass lift (<b>R</b>) to Floor 3, then to his desk and press <b>E</b>.</p>
-          <button className="btn btn-sm" onClick={() => usePlayer.getState().set({ active: false })}>Stop controlling</button>
-        </>
-      ) : (
-        <button className={`btn w-full py-2 ${auto ? "" : "btn-primary"}`} onClick={() => usePlayer.getState().set({ active: true })} data-testid="wt-control-kishore">
-          🎮 {auto ? "Take over: walk Kishore to his desk" : "Control Kishore (W A S D)"}
-        </button>
-      )}
-      {!auto && (
-        <button className="text-[12px] text-accent hover:underline disabled:opacity-50" disabled={disabled} onClick={onApprove} data-testid="wt-approve-here">
-          or approve from here
-        </button>
-      )}
-      {auto && !active && <p className="text-[11.5px] text-muted">Kishore approves in a moment.</p>}
-    </div>
-  );
-}
-
-/** What the crew is doing right now: walking to the machine, then working through the repair checklist. */
-function LiveNow({ asset }: { asset: Asset }) {
-  const now = useSimNow(400);
+/** Walking to the machine (and the lift), then the repair checklist, live from the work order. */
+function CrewLive({ asset }: { asset: Asset }) {
+  const now = useSimNow(300);
   const { data: list } = useWorkOrders(`&asset_id=${asset.id}`);
   const id = [...(list?.items ?? [])].sort((a, b) => b.id - a.id)[0]?.id ?? null;
   const { data: wo } = useWorkOrder(id);
@@ -188,50 +86,208 @@ function LiveNow({ asset }: { asset: Asset }) {
   const first = wo.assigned_technician.name.split(" ")[0];
   const arrives = parseIso(wo.arrives_at);
   const steps = cat?.procedures[asset.asset_type] ?? [];
-  if (wo.status === "ASSIGNED" && !Number.isNaN(arrives) && now < arrives) {
+  if ((wo.status === "ASSIGNED" || wo.status === "IN_PROGRESS") && !Number.isNaN(arrives) && now < arrives) {
     const from = parseIso(wo.assigned_at);
+    const f = (now - from) / Math.max(1, arrives - from);
+    const leg = f < 0.18 ? "collecting the tool kit" : f < 0.45 ? "walking to the glass lift" : asset.floor_level !== 0 && f < 0.7 ? `in the lift to ${floorLabel(asset.floor_level)}` : `walking to ${asset.name}`;
     return (
-      <div className="mt-2 rounded-md border border-line bg-panel2 p-2.5 text-[12.5px]" data-testid="wt-live">
-        <div className="font-semibold">{first} is walking to {asset.name}</div>
-        <div className="mt-0.5 text-muted">crew room → tools → {wo.floor_level === 0 ? "" : `lift to ${floorLabel(wo.floor_level)} → `}machine</div>
-        <div className="mt-1.5"><Progress value={(now - from) / Math.max(1, arrives - from)} /></div>
+      <div className="mt-1.5 rounded-md bg-panel2 p-2 text-[12px]" data-testid="wt-live">
+        <div><b>{first}</b> is {leg}</div>
+        <div className="mt-0.5 text-[11px] text-muted">crew room → tools → {asset.floor_level === 0 ? "" : `lift → ${floorLabel(asset.floor_level)} → `}{asset.name}</div>
+        <div className="mt-1"><Progress value={f} /></div>
       </div>
     );
   }
   if (wo.status === "IN_PROGRESS" && steps.length) {
     const current = stepAt(steps, (now - workBegan(wo)) / 60000);
     return (
-      <div className="mt-2 rounded-md border border-line bg-panel2 p-2.5 text-[12.5px]" data-testid="wt-live">
-        <div className="mb-1 font-semibold">{first} is repairing it</div>
-        <ol className="space-y-1">
-          {steps.map((s, i) => (
-            <li key={s.key} className={`flex items-start gap-2 ${i > current ? "text-muted" : ""}`}>
-              <span className={`mt-[3px] grid h-3.5 w-3.5 shrink-0 place-items-center rounded-[3px] border text-[9px] ${i < current ? "border-ok bg-ok text-white" : i === current ? "border-accent" : "border-line"}`}>
-                {i < current ? "✓" : i === current ? <i className="h-1.5 w-1.5 rounded-full bg-accent" /> : null}
-              </span>
-              <span className={i === current ? "font-semibold" : ""}>{s.label}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ol className="mt-1.5 space-y-0.5 rounded-md bg-panel2 p-2 text-[12px]" data-testid="wt-live">
+        {steps.map((s, i) => (
+          <li key={s.key} className={i > current ? "text-muted" : i === current ? "font-semibold" : ""}>
+            {i < current ? "✓" : i === current ? "▶" : "·"} {s.label}
+          </li>
+        ))}
+      </ol>
     );
   }
-  return null;
+  return <div className="mt-1.5 text-[12px] text-muted" data-testid="wt-live">{first} is on site: toolbox talk and permit to work</div>;
 }
 
-function Marker({ state, n }: { state: "done" | "now" | "next" | "todo"; n: number }) {
-  const cls = { done: "border-ok bg-ok text-white", now: "border-accent bg-accent text-white", next: "border-accent text-accent", todo: "border-line text-muted" }[state];
-  return <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold ${cls}`}>{state === "done" ? "✓" : state === "now" ? <i className="live-dot h-2 w-2 rounded-full bg-white" /> : n}</span>;
+/** What a card says: its data (chips) and, while it is the live step, what is happening right now. */
+function CardBody({ n, wt, asset, state }: { n: number; wt: WalkthroughState; asset: Asset; state: CardState }) {
+  const r = (k: number) => wt.results[String(k)] ?? {};
+  const vib = useLive((s) => s.values[asset.id]?.vibration_velocity);
+  const lines = wt.log.filter((l) => (n === 0 ? l.stage === 0 : l.stage === n)).slice(-2).map((l) => l.text);
+  const live = state === "now" && lines.length > 0 && <div className="mt-1 text-[12px] text-accent" role="status">{lines[lines.length - 1]}</div>;
+  const row = (children: ReactNode) => <div className="mt-1 flex flex-wrap gap-1">{children}</div>;
+  const desc = (text: ReactNode) => state !== "done" && <p className="text-[12px] text-muted">{text}</p>;
+  switch (n) {
+    case 0:
+      return (
+        <>
+          {desc("Hidden from the detector: the bearing starts to wear and vibration creeps up.")}
+          {state !== "todo" && row(<>{wt.normal.vibration_velocity != null && chip(`normal ${fmtSensor("vibration_velocity", wt.normal.vibration_velocity)}`, "ok")}{vib != null && chip(`now ${fmtSensor("vibration_velocity", vib)}`, state === "now" ? "watch" : "muted")}</>)}
+        </>
+      );
+    case 1: {
+      const dups = Object.values((r(1).duplicates ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0);
+      return (
+        <>
+          {desc(`${asset.sensors.length} sensors report every minute. Copies of a reading are dropped, bad data never counts.`)}
+          {state === "done" && row(<>{chip(`${dups} duplicate${dups === 1 ? "" : "s"} dropped`, "ok")}{chip("one copy kept")}</>)}
+          {live}
+        </>
+      );
+    }
+    case 2: {
+      const d = r(2);
+      const sev = wt.escalation.filter((e) => e.level.startsWith("SEVERITY_")).map((e) => e.level.slice(9).toLowerCase());
+      return (
+        <>
+          {desc("Each reading is compared with what is normal for this machine at this load; the trend is projected forward.")}
+          {state === "done" && d.z != null && (
+            <>
+              {row(<>{chip(`${Number(d.z).toFixed(1)}σ above normal`, "bad")}{chip(`normal ${Number(d.baseline).toFixed(2)} → ${Number(d.observed).toFixed(2)} mm/s`)}</>)}
+              {d.projection_hours != null && row(chip(`alarm limit (demo value) in ~${Math.round(Number(d.projection_hours) * 60)} min`, "watch"))}
+              <p className="mt-1 text-[11.5px] text-muted">Consistent with possible bearing wear: inspection recommended.</p>
+            </>
+          )}
+          {state !== "todo" && sev.length > 0 && row(<><span className="text-[11px] text-muted">severity</span>{sev.map((s, i) => <span key={s} className="text-[11px]">{i > 0 && "→ "}{chip(s, s === "low" ? "watch" : "bad")}</span>)}</>)}
+          {live}
+        </>
+      );
+    }
+    case 3: {
+      const d = r(3);
+      return (
+        <>
+          {desc("The risk sets the priority. Repeat alerts are added to the same work order, never a duplicate.")}
+          {state === "done" && row(<>{chip(String(d.work_order), "info")}{chip(priority(d.priority), "watch")}{d.risk != null && chip(`risk ${d.risk}/100`)}{chip(`${d.evidence} alerts as evidence · 0 duplicates`)}</>)}
+          {live}
+        </>
+      );
+    }
+    case 4: {
+      const d = r(4);
+      const reviewing = wt.phase === "approval";
+      const approved = wt.phase === "approved" || state === "done";
+      if (state === "todo") return desc("The request goes to Kishore, the supervisor, with the evidence. He reviews it and approves.");
+      const standby = wt.log.find((l) => l.stage === 4 && l.text.includes("on standby"))?.text.split(" is the best match")[0];
+      return (
+        <>
+          <ul className="space-y-0.5 text-[12px]">
+            <li>📨 Request sent to <b>Kishore</b> (supervisor) with the evidence</li>
+            {standby && <li>🧰 <b>{standby}</b> is lined up and waits for the approval</li>}
+            {(reviewing || approved) && <li className={approved ? "" : "text-accent"}>{approved ? "✓" : "…"} Kishore reviews the trend, the risk and the crew</li>}
+            {d.escalated && <li>⬆ Priority raised {d.escalated.from} → {d.escalated.to} by new evidence; Kishore accepted</li>}
+            {approved && <li className="font-semibold text-ok">✓ Approved by Kishore</li>}
+          </ul>
+          {reviewing && <div className="mt-1.5"><div className="kishore-review-bar h-1 overflow-hidden rounded bg-line"><i className="block h-full bg-accent" style={{ animation: "kc-review 5s linear forwards", transformOrigin: "left" }} /></div></div>}
+        </>
+      );
+    }
+    case 5: {
+      const d = r(5);
+      const ordered = (d.parts_ordered ?? []) as { sku: string; quantity: number }[];
+      return (
+        <>
+          {desc("Technicians are ranked by skill, distance and workload. The job and the reserved parts reach the crew room.")}
+          {state === "done" && (
+            <div data-testid="wt-job-message">
+              {row(<>{chip(`👷 ${d.technician}`, "info")}{chip(`ETA ${d.travel_minutes} min`)}{chip(priority(d.priority), "watch")}</>)}
+              {ordered.length > 0 && <div className="mt-1 text-[12px] text-watch" data-testid="wt-parts-ordered">Parts were short: ordered {ordered.map((o) => `${o.sku} × ${o.quantity}`).join(", ")}, delivered, job resumed.</div>}
+            </div>
+          )}
+          {live}
+        </>
+      );
+    }
+    case 6:
+      return (
+        <>
+          {state !== "done" && <p className="text-[12px] text-muted">Tools from the crew room, the glass lift to {floorLabel(asset.floor_level)}, then the repair step by step.</p>}
+          {state === "now" && <CrewLive asset={asset} />}
+          {state === "done" && <p className="text-[12px]">{String(r(6).findings ?? "")}</p>}
+        </>
+      );
+    case 7: {
+      const d = r(7);
+      const failed = (d.failed_checks ?? []) as string[];
+      return (
+        <>
+          {desc("A full window of fresh readings is compared with normal, independently of the technician. Then Kishore closes the job.")}
+          {failed.length > 0 && <div className="mt-1 text-[12px] text-bad" data-testid="wt-rework">First check failed ({failed.join("; ")}): reworked, then passed.</div>}
+          {state === "done" && row(<>{chip("✓ check passed", "ok")}{chip(`closed by ${d.closed_by ?? "Kishore"}`, "ok")}</>)}
+          {live}
+        </>
+      );
+    }
+    default:
+      return state === "done" ? (
+        <p className="text-[12px]">{asset.name} is healthy again. {Math.round(wt.sim_minutes / 6) / 10} h of building time played in {clock(wt.elapsed_s)}.</p>
+      ) : (
+        <p className="text-[12px] text-muted">The machine is back to normal and the work order is closed.</p>
+      );
+  }
 }
 
-/** Play the demonstration by itself, or advance it one click at a time. */
-function ModeSwitch() {
-  const auto = useDemoMode((s) => s.auto);
+function Marker({ state, n }: { state: CardState; n: number }) {
+  const cls = { done: "border-ok bg-ok text-white", now: "border-accent bg-accent text-white", todo: "border-line text-muted" }[state];
   return (
-    <div className="seg w-full" role="group" aria-label="How the demo runs">
-      <button className="flex-1" aria-pressed={auto} onClick={() => useDemoMode.getState().set(true)} data-testid="wt-mode-auto">Play automatically</button>
-      <button className="flex-1" aria-pressed={!auto} onClick={() => useDemoMode.getState().set(false)} data-testid="wt-mode-manual">Step by step</button>
-    </div>
+    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-[11px] font-semibold transition-colors duration-500 ${cls}`}>
+      {state === "done" ? "✓" : state === "now" ? <i className="live-dot h-2 w-2 rounded-full bg-white" /> : n}
+    </span>
+  );
+}
+
+/** The whole story as cards joined by arrows: done ✓, the live one highlighted, the rest still to come. */
+function Flow({ wt, asset, preview }: { wt: WalkthroughState; asset: Asset; preview: boolean }) {
+  const cards: CardDef[] = [
+    { n: 0, icon: "⚙", title: "A bearing starts to wear", layer: "L1", at: 0 },
+    ...wt.steps.map((s) => ({ n: s.id, icon: ["", "📡", "📈", "📋", "✍", "👷", "🔧", "✅"][s.id], title: s.short === "Approval" ? "Kishore reviews and approves" : s.short === "Dispatch" ? "Technician assigned" : s.short === "Repair" ? "Walk, lift and repair" : s.short === "Prediction" ? "Early warning and prediction" : s.short === "Duplicate check" ? "Sensors send their data" : s.short, layer: s.layers, at: s.at })),
+    { n: 8, icon: "🟢", title: "Back to normal", layer: "L7", at: null },
+  ];
+  const nowCard = preview || !wt.busy ? -1 : PHASE_CARD[wt.phase] ?? -1;
+  const nowRef = useRef<HTMLLIElement | null>(null);
+  useEffect(() => {
+    if (nowCard >= 0) nowRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [nowCard]);
+  const finished = wt.phase === "done" && !wt.busy;
+  const stateOf = (n: number): CardState => {
+    if (preview) return "todo";
+    if (n === nowCard) return "now";
+    if (n === 0) return wt.started ? "done" : "todo";
+    if (n === 8) return finished ? "done" : "todo";
+    return wt.results[String(n)] && n !== nowCard ? "done" : "todo";
+  };
+  return (
+    <ol data-testid={preview ? "wt-plan" : "wt-steps"}>
+      {cards.map((c, i) => {
+        const state = stateOf(c.n);
+        const mark = c.n >= 1 && c.n <= 7 ? wt.marks[String(c.n)] : undefined;
+        const time = preview ? (c.at != null ? clock(c.at) : "1:00") : mark != null ? clock(mark) : c.n === 0 && wt.started ? "0:00" : "";
+        const next = cards[i + 1];
+        const arrow = next ? (stateOf(next.n) === "now" ? "live" : state === "done" ? "done" : "") : null;
+        return (
+          <li key={c.n} ref={state === "now" ? nowRef : undefined} data-testid={c.n >= 1 && c.n <= 7 ? `wt-step-${c.n}` : `wt-flow-${c.n}`} data-state={state}>
+            <div className={`rounded-md border px-2.5 py-2 transition-all duration-500 ${state === "now" ? "border-accent bg-accent/5 shadow-sm" : state === "done" ? "border-line" : "border-line opacity-70"}`}>
+              <div className="flex items-center gap-2">
+                <Marker state={state} n={c.n} />
+                <span className="text-[14px]" aria-hidden>{c.icon}</span>
+                <span className={`flex-1 text-[13px] font-semibold ${state === "todo" ? "text-muted" : ""}`}>{c.title}</span>
+                <span className="mono text-[10.5px] text-muted">{time || c.layer}</span>
+              </div>
+              {(state !== "todo" || preview) && (
+                <div className="mt-1 pl-8">
+                  <CardBody n={c.n} wt={wt} asset={asset} state={state} />
+                </div>
+              )}
+            </div>
+            {arrow !== null && <div className={`flow-arrow ${arrow}`} aria-hidden><i /><b>▼</b></div>}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -239,13 +295,21 @@ export default function ProcessPanel() {
   const qc = useQueryClient();
   const { run, busy: acting } = useAct();
   const { data: wt, isError } = useWalkthrough();
-  const auto = useDemoMode((s) => s.auto);
   const selected = useUi((s) => s.selectedAssetId);
-  const assetId = wt?.asset_id ?? selected ?? GOLDEN_ASSET;
+  const finished = !!wt && wt.phase === "done" && !wt.busy;
+  // after step 7 the finished run stays on screen for a moment, then the tab is ready for the next machine
+  const [idleAgain, setIdleAgain] = useState(false);
+  useEffect(() => {
+    if (!finished) {
+      setIdleAgain(false);
+      return;
+    }
+    const t = window.setTimeout(() => setIdleAgain(true), BACK_TO_IDLE_MS);
+    return () => window.clearTimeout(t);
+  }, [finished]);
+  const live = !!wt?.asset_id && (wt.busy || !!wt.error || (finished && !idleAgain));
+  const assetId = live ? wt!.asset_id : selected ?? wt?.asset_id ?? GOLDEN_ASSET;
   const { data: asset } = useAsset(assetId);
-  const [open, setOpen] = useState<number | null>(null);
-  const stage = wt?.stage ?? 0;
-  useEffect(() => setOpen(stage || null), [stage]);
 
   if (isError) {
     return (
@@ -255,11 +319,8 @@ export default function ProcessPanel() {
     );
   }
   if (!wt || !asset) return <Loading />;
-  const live = !!wt.asset_id;
-  const working = wt.busy || acting;
   const refresh = () => qc.invalidateQueries({ queryKey: ["walkthrough"] });
   const start = () => run(() => startWalkthrough(asset.id), "").then(refresh);
-  const next = () => run(() => nextWalkthroughStep()).then(refresh);
   const reset = async () => {
     usePlayer.getState().set({ active: false });
     await run(() => resetWalkthrough());
@@ -278,77 +339,45 @@ export default function ProcessPanel() {
   );
 
   if (!live) {
+    const last = finished && wt.asset_id;
     return (
-      <div className="space-y-4 p-4" data-testid="process-panel">
+      <div className="space-y-3 p-4" data-testid="process-panel">
         {header}
+        {last && (
+          <p className="rounded-md border border-ok/40 bg-ok/5 p-2 text-[12px]" data-testid="wt-last">
+            ✓ Last simulation: {wt.asset_id} found, repaired, checked and closed in {clock(wt.elapsed_s)}. Ready for the next one.
+          </p>
+        )}
         <SensorStrip asset={asset} />
-        <ModeSwitch />
-        <button className="btn btn-primary w-full py-2.5 text-[14px]" disabled={working} onClick={start} data-testid="wt-start">
-          ⚠ Start anomaly on this machine
+        <button className="btn btn-primary w-full py-2.5 text-[14px]" disabled={wt.busy || acting} onClick={start} data-testid="wt-start">
+          ⚠ Inject anomaly on {asset.name}
         </button>
-        <p className="text-[12px] text-muted">
-          {auto ? "The whole process plays by itself. You see every step here, and in the building." : <>Press <b>Next</b> for every step.</>} Click another machine to choose it.
-        </p>
+        <p className="text-[12px] text-muted">Plays by itself in about one minute, in the building and here, step by step. No sign-in, no clicks; approvals happen automatically. One simulation at a time.</p>
+        {!!wt.leftovers?.length && (
+          <p className="rounded-md border border-watch/40 bg-watch/5 p-2 text-[12px]" data-testid="wt-leftovers">
+            Earlier runs left {wt.leftovers.join(", ")}. A new simulation clears them first, so it always starts clean.
+          </p>
+        )}
+        <div className="h-section">What happens</div>
+        <Flow wt={wt} asset={asset} preview />
       </div>
     );
   }
 
-  const finished = stage >= wt.total && !wt.busy;
-  const lastLog = wt.log.length ? wt.log[wt.log.length - 1].text : null;
   return (
-    <div className="space-y-4 p-4" data-testid="process-panel">
+    <div className="space-y-3 p-4" data-testid="process-panel">
       {header}
-      <SensorStrip asset={asset} />
-      <ModeSwitch />
-
-      {!wt.started ? (
-        <div className="rounded-md border border-line p-3 text-[13px]" role="status">
-          <i className="live-dot mr-2 inline-block h-2 w-2 rounded-full bg-accent" />A bearing starts to wear…
+      <RunClock wt={wt} />
+      {wt.preparing && (
+        <div className="rounded-md border border-line p-2.5 text-[12.5px]" role="status" data-testid="wt-preparing">
+          <i className="live-dot mr-2 inline-block h-2 w-2 rounded-full bg-accent" />Getting the building ready: clearing {wt.cleared.join(", ")} left by earlier runs…
         </div>
-      ) : (
-        <ol className="space-y-1.5" data-testid="wt-steps">
-          {wt.steps.map((s) => {
-            const executing = wt.busy && stage === s.id;
-            const done = stage >= s.id && !executing && !!wt.results[String(s.id)];
-            const isNext = !wt.busy && stage + 1 === s.id;
-            const state = done ? "done" : executing ? "now" : isNext ? "next" : "todo";
-            const expanded = isNext || executing || (done && open === s.id);
-            return (
-              <li key={s.id} className={`rounded-md border px-2.5 py-2 ${isNext ? "border-accent bg-accent/5" : "border-line"}`} data-testid={`wt-step-${s.id}`} data-state={state}>
-                <button className="flex w-full items-center gap-2 text-left" disabled={!done} onClick={() => setOpen(open === s.id ? null : s.id)} aria-expanded={expanded}>
-                  <Marker state={state} n={s.id} />
-                  <span className={`flex-1 text-[13px] font-semibold ${state === "todo" ? "text-muted" : ""}`}>{s.short}</span>
-                  <span className="mono text-[10.5px] text-muted">{s.layers}</span>
-                </button>
-                {expanded && (
-                  <div className="mt-1.5 pl-8">
-                    <div className="text-[13px] font-medium leading-snug">{s.title}</div>
-                    {!done && <p className="mt-0.5 text-[12px] text-muted">{s.text}</p>}
-                    {executing && <p className="mt-1 text-[12px] text-accent" role="status">{lastLog ?? "Working…"}</p>}
-                    {executing && s.id === 6 && <LiveNow asset={asset} />}
-                    {done && <Result n={s.id} asset={asset} wt={wt} />}
-                    {isNext && s.id === 4 && <KishoreControls onApprove={next} disabled={working} auto={auto} />}
-                    {isNext && s.id !== 4 && !auto && (
-                      <button className="btn btn-primary mt-2 w-full py-2" disabled={working} onClick={next} data-testid="wt-next">
-                        Next ▶
-                      </button>
-                    )}
-                    {isNext && auto && s.id !== 4 && <p className="mt-1 text-[11.5px] text-muted">Starting in a moment…</p>}
-                    {done && s.id === 6 && (
-                      <button className="btn btn-sm mt-2" onClick={() => useUi.getState().fly({ preset: "follow", assetId: asset.id })}>Watch the technician</button>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ol>
       )}
-
+      <Flow wt={wt} asset={asset} preview={false} />
       {wt.error && <p className="rounded-md border border-bad/40 bg-bad/5 p-2 text-[12px] text-bad" role="alert">{wt.error}</p>}
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[11.5px] text-muted">{finished ? "All done." : wt.started ? `Step ${Math.min(stage + 1, wt.total)} of ${wt.total}` : ""}</span>
-        <button className="btn btn-sm" disabled={wt.busy || acting} onClick={reset} data-testid="wt-reset">Start over</button>
+      {finished && <p className="text-center text-[12px] text-muted" data-testid="wt-done">Done. Ready for the next machine in a few seconds…</p>}
+      <div className="flex items-center justify-end">
+        <button className="btn btn-sm" disabled={acting} onClick={reset} data-testid="wt-reset">Start over</button>
       </div>
     </div>
   );

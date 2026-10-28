@@ -98,11 +98,30 @@ export interface AutopilotState {
   expedited: string[];
   log: OpsLogEntry[]; simulated: boolean;
 }
-export interface WalkthroughStep { id: number; layers: string; short: string; title: string; text: string }
-/** The one-click walkthrough: `stage` = steps already done (0..total); `started` once the wear has begun. */
+/** `at` / `seconds`: where the step sits on the one-minute clock of an automatic run. */
+export interface WalkthroughStep { id: number; layers: string; short: string; title: string; text: string; at: number; seconds: number }
+/**
+ * The walkthrough: `stage` = steps already done (0..total); `started` once the wear has begun.
+ * `auto`: the backend plays every step by itself on a `budget_s` (one minute) clock; `elapsed_s` is that clock,
+ * `marks[step]` the second on it when each step finished, `sim_minutes` the building time simulated so far.
+ * `normal`: every sensor's value before the wear began. `escalation`: the ladder the problem climbed
+ * (level e.g. NORMAL, WATCH, ANOMALY, SEVERITY_HIGH, WORK_ORDER_P2, SUPERVISOR, PRIORITY_P1, APPROVED, CLEARED).
+ */
+export type WalkPhase = "idle" | "starting" | "preparing" | "wear" | "readings" | "prediction" | "workorder" | "approval" | "approved"
+  | "dispatch" | "walking" | "working" | "verifying" | "rework" | "closing" | "done";
+export interface EscalationRung { level: string; text: string; t: number }
 export interface WalkthroughState {
-  asset_id: string | null; started: boolean; stage: number; total: number; busy: boolean; error: string | null;
-  steps: WalkthroughStep[]; results: Record<string, Record<string, any>>; log: { stage: number; text: string }[]; simulated: boolean;
+  asset_id: string | null; started: boolean; stage: number; total: number; busy: boolean; auto: boolean; error: string | null;
+  /** What is happening right now (drives the camera and the flow): idle, starting, preparing, wear, readings, prediction,
+   *  workorder, approval, approved, dispatch, walking, working, verifying, rework, closing, done. */
+  phase: WalkPhase;
+  /** True while an earlier run's leftovers are being cleared (before the one-minute clock starts); `cleared` says what they were. */
+  preparing: boolean; cleared: string[];
+  /** What earlier runs left in the building right now; a new run clears it first. Empty when clean (or while a run plays). */
+  leftovers?: string[];
+  steps: WalkthroughStep[]; results: Record<string, Record<string, any>>; log: { stage: number; text: string; t: number }[];
+  marks: Record<string, number>; elapsed_s: number; budget_s: number; sim_minutes: number;
+  normal: Record<string, number>; escalation: EscalationRung[]; simulated: boolean;
 }
 export interface ProcedureStep { key: string; label: string; minutes: number }
 export interface ProcedureCatalogue { procedures: Record<string, ProcedureStep[]>; rework: ProcedureStep[]; note: string }

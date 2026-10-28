@@ -45,6 +45,7 @@ import numpy as np
 
 from app.modules.cmms import procedures
 from app.modules.demo.director import Api, director
+from app.modules.demo.walkthrough import walkthrough
 from app.modules.simulation.engine import PROFILE_DURATION_H
 
 MEAN_GAP_H: dict[str, float | None] = {"off": None, "low": 8.0, "normal": 4.0, "high": 1.5}
@@ -136,8 +137,9 @@ class Autopilot:
             if not self.enabled and not self._expedite:
                 self.status = "off"
                 return
-            if director.busy or director.autoplay:
-                self.status = "paused — guided demo running"
+            if director.busy or director.autoplay or walkthrough.busy:
+                # one simulation at a time: a second crew on the same job would race the demo and get refused (409)
+                self.status = "paused — demo running"
                 return
             if require_running and not sim["running"]:
                 self.status = "waiting — simulation paused"

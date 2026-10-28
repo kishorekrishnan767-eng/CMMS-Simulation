@@ -1,18 +1,19 @@
 import { api } from "../api/client";
 import type { Me, WalkthroughState } from "../api/types";
-import { useSession } from "../store/session";
+import { KISHORE, useSession } from "../store/session";
 
-/** The demo only needs *a* signed-in user; if nobody is, sign in as the demo operator so one click just works. */
+/** No sign-in in this simulation: if the app has not signed in as Kishore yet, do it now so one click just works. */
 export async function ensureSignedIn() {
   const s = useSession.getState();
   if (s.token) return;
-  const r = await api.post<{ access_token: string; user: Me }>("/api/auth/login", { username: "operator", password: "demo1234" });
+  const r = await api.post<{ access_token: string; user: Me }>("/api/auth/login", { username: KISHORE, password: "demo1234" });
   s.login(r.access_token, r.user);
 }
 
-export async function startWalkthrough(assetId: string) {
+/** Inject the anomaly and play the whole story by itself in one minute (`auto = false`: one step per call). */
+export async function startWalkthrough(assetId: string, auto = true) {
   await ensureSignedIn();
-  return api.post<WalkthroughState>("/api/walkthrough/start", { asset_id: assetId });
+  return api.post<WalkthroughState>("/api/walkthrough/start", { asset_id: assetId, auto });
 }
 
 export async function nextWalkthroughStep() {

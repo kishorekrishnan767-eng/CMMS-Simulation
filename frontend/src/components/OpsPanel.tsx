@@ -3,7 +3,6 @@ import { api } from "../api/client";
 import { useAssets, useAutopilot, useProcedures, useTechnicians, useWorkOrders } from "../api/queries";
 import type { AutopilotState, Health } from "../api/types";
 import { useLive } from "../store/live";
-import { useSession } from "../store/session";
 import { useUi } from "../store/ui";
 import { floorLabel } from "../three/constants";
 import { techPose } from "../three/techPath";
@@ -14,8 +13,6 @@ const RATE_LABEL: Record<string, string> = { off: "Off", low: "Low", normal: "No
 /** One switch: let the building run itself (random wear, crew handles every job), or keep it manual. */
 function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
   const { run, busy } = useAct();
-  const me = useSession((s) => s.me);
-  const can = !!me && ["ADMIN", "OPERATOR", "SUPERVISOR"].includes(me.role);
   const patch = (body: Partial<{ enabled: boolean; fault_rate: string }>) => run(() => api.patch<AutopilotState>("/api/autopilot", body));
   if (!ap) return null;
   return (
@@ -25,9 +22,8 @@ function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
         <button
           role="switch"
           aria-checked={ap.enabled}
-          disabled={busy || !can}
+          disabled={busy}
           onClick={() => patch({ enabled: !ap.enabled })}
-          title={can ? "" : "Operator, Supervisor or Admin only"}
           className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${ap.enabled ? "bg-accent" : "bg-line"} disabled:opacity-50`}
           data-testid="autopilot-toggle"
         >
@@ -39,7 +35,7 @@ function AutopilotCard({ ap }: { ap: AutopilotState | undefined }) {
           <div className="mb-1 text-[11px] text-muted">How often machines wear</div>
           <div className="seg" role="group" aria-label="Fault frequency">
             {ap.fault_rates.map((r) => (
-              <button key={r} aria-pressed={ap.fault_rate === r} disabled={busy || !can} onClick={() => patch({ fault_rate: r })} data-testid={`fault-rate-${r}`}>
+              <button key={r} aria-pressed={ap.fault_rate === r} disabled={busy} onClick={() => patch({ fault_rate: r })} data-testid={`fault-rate-${r}`}>
                 {RATE_LABEL[r] ?? r}
               </button>
             ))}

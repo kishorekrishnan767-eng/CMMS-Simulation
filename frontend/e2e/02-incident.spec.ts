@@ -64,16 +64,14 @@ test.describe.serial("golden incident on AHU-02-FAN-01", () => {
   });
 
   test("DoD-6: the operator is denied by the backend (403, audited); the supervisor approves", async ({ request }) => {
-    await page.goto(`/cmms?wo=${woId}`);
-    await expect(page.getByTestId("wo-drawer")).toBeVisible();
-    await page.getByRole("button", { name: /Try any action/ }).click();
-    await page.getByTestId("try-approve").click();
-    await expect(page.getByTestId("toasts")).toContainText("Denied by the backend (403)");
+    // the UI has no roles to pick (it always acts as Kishore), but the backend still enforces them
+    const refused = await call(request, "operator", "post", `/api/work-orders/${woId}/approve`, { note: "Looks urgent" });
+    expect(refused.status).toBe(403);
     const denied = await call(request, "admin", "get", "/api/audit-logs?outcome=DENIED&action=wo.approve");
     expect(denied.body.items[0]).toMatchObject({ username: "operator", outcome: "DENIED", target_id: woNumber });
-    // role switch through the UI, then approve with the real button
-    await page.getByTestId("role-switcher").click();
-    await page.getByTestId("login-supervisor").click();
+    // Kishore approves with the real button
+    await page.goto(`/cmms?wo=${woId}`);
+    await expect(page.getByTestId("wo-drawer")).toBeVisible();
     await expect(page.getByTestId("act-approve")).toBeVisible();
     await page.getByTestId("act-approve").click();
     await expect(page.getByTestId("wo-drawer").getByText("OPEN", { exact: true }).first()).toBeVisible();
