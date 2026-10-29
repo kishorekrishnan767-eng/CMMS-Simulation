@@ -22,6 +22,7 @@ ASSET = "AHU-02-FAN-01"
 CLOSURE = {"work_verified": True, "area_safe_and_clean": True, "documentation_complete": True, "parts_reconciled": True}
 REPAIR = {
     "findings": "Inner-race spalling found on the drive-end bearing; bearing set replaced and re-greased.",
+    "photo_data": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>",
     "checklist": {"lockout_tagout": True, "bearing_replaced": True, "alignment_checked": True},
     "parts_used": [{"sku": "BRG-001", "quantity": 1}, {"sku": "GRS-001", "quantity": 1}],
 }
@@ -186,7 +187,13 @@ class Api:
         return self.tokens[user]
 
     def call(self, user: str, method: str, path: str, **kw: Any) -> Any:
-        r = self.client.request(method.upper(), path, headers={"Authorization": f"Bearer {self.token(user)}"}, **kw)
+        token = self.token(user)
+        r = self.client.request(method.upper(), path, headers={"Authorization": f"Bearer {token}"}, **kw)
+        if r.status_code == 401 and r.json().get("error", {}).get("code") in {"token_expired", "invalid_token"}:
+            self.tokens.pop(user, None)
+            r = self.client.request(
+                method.upper(), path, headers={"Authorization": f"Bearer {self.token(user)}"}, **kw
+            )
         return r
 
     def ok(self, user: str, method: str, path: str, **kw: Any) -> Any:

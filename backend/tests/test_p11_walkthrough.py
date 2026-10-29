@@ -78,7 +78,7 @@ def test_automatic_run_plays_every_stage_without_a_click(wt):
     assert 100 <= wt.sim_minutes <= 200
     assert all("t" in line for line in wt.log)
     state = wt.state()
-    assert state["auto"] is True and state["budget_s"] == 60 and state["sim_minutes"] == wt.sim_minutes
+    assert state["auto"] is True and state["budget_s"] == wmod.BUDGET_SECONDS == 150 and state["sim_minutes"] == wt.sim_minutes
 
 
 def test_run_survives_a_parts_shortage_by_ordering_and_receiving_stock(wt):
@@ -182,7 +182,7 @@ def test_a_failed_independent_check_is_reworked_and_the_run_still_closes(wt):
     assert actions.count("complete") == 2 and "verify_fail" in actions and actions[-1] == "close"
     assert actions.index("verify_fail") < actions.index("restart") < max(i for i, a in enumerate(actions) if a == "verify_pass")
     assert detail["repair_count"] == 2
-    assert wt.state()["budget_s"] == 60 + 16  # the clock says it ran one rework round longer
+    assert wt.state()["budget_s"] == wmod.BUDGET_SECONDS + wmod.REWORK_SECONDS  # the clock says it ran one rework round longer
     assert api.ok("admin", "get", "/api/audit-logs?outcome=DENIED&limit=50")["total"] == 0
 
 
@@ -259,14 +259,39 @@ def test_the_walk_gets_its_own_share_of_the_repair_slot(wt):
 
 
 def test_kishore_gets_time_to_review():
-    assert wmod.SLOTS[4] >= 6  # the approval is not a blink: the camera stays on Kishore while he reads
+    assert wmod.SLOTS[4] >= 12  # the approval is not a blink: the camera stays on Kishore while he reads
+
+
+def test_the_walk_is_at_a_natural_pace_and_every_step_has_time_to_be_read():
+    """Walk window = WALK_SHARE of the repair slot (≈ 26 s); no step flashes by."""
+    assert wmod.SLOTS[6] * wmod.WALK_SHARE >= 24
+    assert all(wmod.SLOTS[k] >= 9 for k in (1, 2, 3, 4, 5, 6, 7))
+
+
+def test_narration_is_spread_evenly_across_a_slot(wt, monkeypatch):
+    """Line k of n is said at start + (k+1)/(n+1) of the way: the screen never sits silent."""
+    import time
+
+    said: list[tuple[float, str]] = []
+    wt.auto, wt.pace = True, 1.0
+    wt._t0 = time.monotonic() - 20.0  # an arbitrary point inside slot 2
+    monkeypatch.setattr(wt, "_say", lambda text: said.append((time.monotonic(), text)))
+    monkeypatch.setattr(wt, "_nap", lambda s: None)  # no real sleeping: only the due times are checked
+    wt._slot = 2
+    wt._queue_lines(["a", "b", "c"], None)
+    start, end = wt._lines_from, wt._lines_to
+    assert [round((wt._next_due() - start) / (end - start), 2)] == [0.25]
+    wt._lines_from = time.monotonic() - 100  # everything is due
+    wt._lines_to = time.monotonic() - 1
+    wt._drip()
+    assert [t for _, t in said] == ["a", "b", "c"] and not wt._lines
 
 
 def test_slots_fill_exactly_one_minute_and_steps_sit_on_that_clock():
-    assert sum(wmod.SLOTS.values()) == wmod.BUDGET_SECONDS == 60
+    assert sum(wmod.SLOTS.values()) == wmod.BUDGET_SECONDS == 150  # two and a half minutes
     assert wmod.STEPS[0]["at"] == wmod.SLOTS[0]
     assert all(b["at"] == a["at"] + a["seconds"] for a, b in zip(wmod.STEPS, wmod.STEPS[1:]))
-    assert wmod.STEPS[-1]["at"] + wmod.STEPS[-1]["seconds"] == 60
+    assert wmod.STEPS[-1]["at"] + wmod.STEPS[-1]["seconds"] == wmod.BUDGET_SECONDS
 
 
 def test_pacing_splits_the_rest_of_the_slot_over_the_expected_calls(wt, monkeypatch):

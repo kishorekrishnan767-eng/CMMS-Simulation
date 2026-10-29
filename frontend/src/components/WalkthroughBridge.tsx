@@ -3,50 +3,31 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useWalkthrough } from "../api/queries";
 import type { WalkPhase } from "../api/types";
 import { usePlayer } from "../store/player";
-import { useUi, type CameraGoal } from "../store/ui";
-
-type Shot = Omit<CameraGoal, "nonce" | "assetId">;
-
-/**
- * The camera director of the one-minute run: one cinematic shot per phase of the story. Each shot is a slow,
- * eased flight (2.4–3.5 s) that then holds with a gentle drift around its subject; the walk is trailed with the
- * floors above the technician cut away (so a basement job shows the basement). `null` keeps the current shot.
- */
-const SHOTS: Record<WalkPhase, Shot | null> = {
-  idle: null,
-  starting: null,
-  preparing: null,
-  wear: { preset: "asset", close: true, duration: 3 }, // the machine where the bearing starts to wear
-  readings: { preset: "asset", duration: 2.6 }, // its sensors and their live tags
-  prediction: { preset: "asset", close: true, duration: 2.6 }, // the halo turns red: the early warning
-  workorder: { preset: "asset", duration: 2.6 }, // the work-order pin appears over the machine
-  approval: { preset: "kishore", duration: 3.4 }, // Kishore at his BMS console, reading the request
-  approved: null, // stay on Kishore while he approves
-  dispatch: { preset: "crew", duration: 3 }, // the job reaches the crew room, the technician gets up
-  walking: { preset: "follow", duration: 2.6 }, // tools, lift, corridor: trailed all the way
-  working: { preset: "asset", close: true, duration: 2.6 }, // the repair, step by step
-  rework: { preset: "follow", duration: 2.6 }, // back to the machine after a failed check
-  verifying: { preset: "asset", duration: 2.8 }, // fresh readings settle back to normal
-  closing: null,
-  done: null, // handled below: a short hold, then back to the whole building
-};
+import { useUi } from "../store/ui";
+import { SHOTS } from "./walkStory";
 
 /** Wall seconds the finished machine stays on screen before the camera returns to the building overview. */
 const DONE_HOLD_MS = 3500;
 
-/** Glue between the one-minute run and the 3D view (renders nothing). Nothing here waits for a click. */
+/** Glue between the 150-second run and the 3D view (renders nothing). Nothing here waits for a click. */
 export default function WalkthroughBridge() {
   const { data: wt } = useWalkthrough();
   const qc = useQueryClient();
   const lastAsset = useRef<string | null>(null);
   const lastPhase = useRef<WalkPhase | null>(null);
   const doneTimer = useRef<number | undefined>(undefined);
+  const leftWasOpen = useRef<boolean | null>(null);
   useEffect(() => () => window.clearTimeout(doneTimer.current), []);
 
   useEffect(() => {
     const ui = useUi.getState();
     const asset = wt?.asset_id ?? null;
     const phase = wt?.phase ?? "idle";
+    if (!wt?.busy && phase !== "done" && leftWasOpen.current !== null) {
+      // the run stopped (error, or Start over): give the building tree back
+      ui.set({ leftPanelOpen: leftWasOpen.current, cinematic: false });
+      leftWasOpen.current = null;
+    }
     if (!asset) {
       lastAsset.current = null;
       lastPhase.current = null;
@@ -56,7 +37,9 @@ export default function WalkthroughBridge() {
       lastAsset.current = asset;
       usePlayer.getState().set({ active: false }); // the run takes the camera
       ui.selectAsset(asset, false);
-      ui.set({ rightPanelOpen: true, rightTab: "process" });
+      // the film gets the whole view: the building tree folds away until the run is over
+      if (leftWasOpen.current === null) leftWasOpen.current = ui.leftPanelOpen;
+      ui.set({ rightPanelOpen: true, rightTab: "process", leftPanelOpen: false });
     }
     if (phase === lastPhase.current) return;
     lastPhase.current = phase;
@@ -67,8 +50,10 @@ export default function WalkthroughBridge() {
       // (kept in a ref, not an effect cleanup: `busy` flips right after `done` and must not cancel it)
       doneTimer.current = window.setTimeout(() => {
         if (lastPhase.current !== "done") return;
-        useUi.getState().set({ cinematic: false });
-        useUi.getState().fly({ preset: "overview", duration: 3.5 });
+        const u = useUi.getState();
+        u.set({ cinematic: false, leftPanelOpen: leftWasOpen.current ?? true });
+        leftWasOpen.current = null;
+        u.fly({ preset: "overview", duration: 3.5 });
       }, DONE_HOLD_MS);
       return;
     }

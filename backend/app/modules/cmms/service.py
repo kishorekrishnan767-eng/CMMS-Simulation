@@ -67,7 +67,7 @@ def wo_detail(session: Session, wo: WorkOrder, actor: Actor | None = None) -> di
                        StockMovement.work_order_id == wo.id, StockMovement.sku == p.sku,
                        StockMovement.movement_type == "CONSUME")))} for p in parts]
     d["inspections"] = [{"id": i.id, "repair_number": i.repair_number, "technician_id": i.technician_id,
-                         "findings": i.findings, "checklist": i.checklist, "parts_used": i.parts_used,
+                         "findings": i.findings, "photo_data": i.photo_data, "checklist": i.checklist, "parts_used": i.parts_used,
                          "labour_minutes": i.labour_minutes, "recorded_at": clock.iso(i.recorded_at)}
                         for i in session.scalars(select(InspectionRecord).where(InspectionRecord.work_order_id == wo.id)
                                                  .order_by(InspectionRecord.id))]

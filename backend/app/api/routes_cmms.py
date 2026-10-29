@@ -41,6 +41,7 @@ class ActionIn(BaseModel):
     checklist: dict[str, Any] | None = None
     parts_used: list[dict[str, Any]] | None = None
     outcome: str | None = None
+    photo_data: str | None = None
     accept: bool = True
 
 

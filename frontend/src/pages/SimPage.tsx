@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useWalkthrough } from "../api/queries";
 import DemoDirector from "../components/DemoDirector";
@@ -6,6 +6,7 @@ import LayerRibbon from "../components/LayerRibbon";
 import LeftPanel from "../components/LeftPanel";
 import PlayerHud from "../components/PlayerHud";
 import RightPanel from "../components/RightPanel";
+import CinematicOverlay from "../components/CinematicOverlay";
 import WalkthroughBridge from "../components/WalkthroughBridge";
 import { Loading } from "../components/ui";
 import { GOLDEN_ASSET } from "../config";
@@ -21,7 +22,8 @@ export default function SimPage() {
   const demo = params.get("demo") === "1";
   const rightOpen = useUi((s) => s.rightPanelOpen);
   const selected = useUi((s) => s.selectedAssetId);
-  const [leftOpen, setLeftOpen] = useState(true);
+  const leftOpen = useUi((s) => s.leftPanelOpen);
+  const setLeftOpen = (fn: (o: boolean) => boolean) => useUi.getState().set({ leftPanelOpen: fn(useUi.getState().leftPanelOpen) });
   const { data: wt } = useWalkthrough();
   const controlling = usePlayer((s) => s.active);
 
@@ -50,6 +52,7 @@ export default function SimPage() {
         {leftOpen ? "‹" : "›"}
       </button>
 
+      <CinematicOverlay />
       <PlayerHud />
       <WalkthroughBridge />
 
@@ -77,7 +80,7 @@ export default function SimPage() {
           }}
           data-testid="watch-demo"
         >
-          ▶ 1-minute anomaly demo
+          ▶ Anomaly demo (2½ min)
         </button>
       )}
     </div>

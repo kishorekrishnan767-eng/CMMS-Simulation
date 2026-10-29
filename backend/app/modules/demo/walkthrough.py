@@ -1,4 +1,4 @@
-"""Walkthrough — a client demo of how one anomaly is found and fixed, in one minute.
+"""Walkthrough — a client demo of how one anomaly is found and fixed, in two and a half minutes.
 
 Like the guided demo director and the autopilot, the walkthrough is only an API client: it acts as the
 simulated people (Kishore the supervisor, the technicians, the independent check) and calls the same HTTP
@@ -8,12 +8,12 @@ stages a refused action: each request is made by the person whose job it is, and
 Besides the stages it records what a client needs to see the difference an anomaly makes:
 ``normal`` (every sensor's value before the wear began) and ``escalation`` (the ladder the problem climbs:
 normal → watch → early warning → severity rises → work order priority → escalated to the supervisor →
-approved → back to normal), each entry stamped with its second on the one-minute clock.
+approved → back to normal), each entry stamped with its second on the 150-second clock.
 
 Two ways to run it:
 
 * **automatic** (``begin_auto``): one click on *Inject anomaly* plays every stage by itself and the whole
-  story, from the first worn bearing to the closed work order, takes ``BUDGET_SECONDS`` (one minute) of
+  story, from the first worn bearing to the closed work order, takes ``BUDGET_SECONDS`` (two and a half minutes) of
   real time. Roughly two simulated hours are compressed into that minute.
 * **step by step** (``begin`` + ``next_step``): the simulation clock is paused and each press of *Next*
   advances simulated time just far enough for the next stage to happen.
@@ -28,7 +28,7 @@ Two ways to run it:
     7       an independent check of fresh readings passes; Kishore closes the job      L7
 
 Pacing of an automatic run (wall-clock schedule). Stage k owns the slot ``SLOTS[k]`` seconds and must end
-at ``end_k = t0 + pace · Σ_{j ≤ k} SLOTS[j]`` (``pace`` = ``demo_pace``, 1.0 → 60 s, 0 → no sleeping). The
+at ``end_k = t0 + pace · Σ_{j ≤ k} SLOTS[j]`` (``pace`` = ``demo_pace``, 1.0 → 150 s, 0 → no sleeping). The
 stage expects to need ``m`` simulated minutes (``_enter``). After each simulated minute (or chunk of
 ``c`` minutes) the run sleeps
 
@@ -56,21 +56,21 @@ TECH_USER = {"TECH-01": "tech1", "TECH-02": "tech2", "TECH-03": "tech3"}
 # seconds of real time per simulated minute in step-by-step mode: just enough to see the change in 3D
 PACE = {"readings": 0.12, "detect": 0.07, "walk": 0.35, "work": 0.2, "verify": 0.1}
 
-BUDGET_SECONDS = 60.0
+BUDGET_SECONDS = 150.0
 # simulated minutes a purchase order takes to arrive when a job's spare parts are short (the autopilot waits 30–60)
 DELIVERY_MINUTES = 3
 # A failed independent check is a real outcome (a repair can be partial, or noise can trip the "max z < 3.0 over
 # 30 samples" rule in ~4 % of healthy repairs): the job goes back for rework. Each rework round adds this many
-# seconds to the one-minute clock, and at most MAX_REWORK rounds are played before the run reports an error.
-REWORK_SECONDS = 16.0
+# seconds to the clock, and at most MAX_REWORK rounds are played before the run reports an error.
+REWORK_SECONDS = 40.0
 MAX_REWORK = 2
 # Wall-clock slot of each part of the automatic run, in seconds (key 0 = the wear begins). Σ = BUDGET_SECONDS.
-# Sized from measured compute with a browser attached (≈ 0.15 s per simulated minute): repair (34 min) and
-# verification (62 min) cannot be squeezed below ≈ 10 s each, approval and dispatch need almost none.
-SLOTS: dict[int, float] = {0: 3, 1: 3, 2: 8, 3: 4, 4: 7, 5: 5, 6: 16, 7: 14}
+# Computing the whole story takes ≈ 32 s with a browser attached (≈ 0.15 s per simulated minute); the rest of the
+# 150 s is deliberate screen time so each step can be read: the walk (≈ 26 s) and the repair get half of the run.
+SLOTS: dict[int, float] = {0: 6, 1: 9, 2: 17, 3: 11, 4: 17, 5: 12, 6: 48, 7: 30}
 # Within stage 6 the walk (crew room → tools → lift → machine) gets this share of the slot, the repair the rest,
-# so the walk and the lift ride stay on screen long enough to be followed (it is only a few simulated minutes).
-WALK_SHARE = 0.5
+# so the walk and the lift ride last long enough to be followed at a natural walking pace (≈ 1.5 m/s).
+WALK_SHARE = 0.55
 
 STEPS: list[dict[str, Any]] = [
     {"id": 1, "layers": "L2 · L3", "short": "Duplicate check", "title": "Readings arrive. Copies are dropped.",
@@ -89,7 +89,7 @@ STEPS: list[dict[str, Any]] = [
      "text": "Fresh readings are compared with normal by a check that is independent of the technician. Kishore closes the job."},
 ]
 _at = SLOTS[0]
-for _s in STEPS:  # where each stage sits on the one-minute clock
+for _s in STEPS:  # where each stage sits on the 150-second clock
     _s["at"], _s["seconds"] = _at, SLOTS[_s["id"]]
     _at += SLOTS[_s["id"]]
 assert abs(_at - BUDGET_SECONDS) < 1e-9
@@ -111,7 +111,7 @@ class Walkthrough:
         self.stage = 0
         self.busy = False
         self.auto = False
-        self.preparing = False  # clearing an earlier run's leftovers, before the one-minute clock starts
+        self.preparing = False  # clearing an earlier run's leftovers, before the 150-second clock starts
         # what is happening right now: idle, preparing, wear, readings, prediction, workorder, approval, approved,
         # dispatch, walking, working, verifying, rework, closing, done (drives the camera and the Process tab)
         self.phase = "idle"
@@ -135,6 +135,11 @@ class Walkthrough:
         self._t_end: float | None = None
         self._slot = 0
         self._deadline: float | None = None
+        # narration: lines said at even intervals between ``_lines_from`` and ``_lines_to`` (wall clock)
+        self._lines: list[str] = []
+        self._lines_n = 0
+        self._lines_from = 0.0
+        self._lines_to = 0.0
         self._left = 0
 
     # ------------------------------------------------------------------ public
@@ -154,7 +159,7 @@ class Walkthrough:
         return self._spawn(self._start)
 
     def begin_auto(self, asset_id: str, cleared: list[str] | None = None) -> dict[str, Any]:
-        """Automatic: play every stage, from the first worn bearing to the closed work order, in one minute.
+        """Automatic: play every stage, from the first worn bearing to the closed work order, in two and a half minutes.
 
         ``cleared`` lists what earlier runs left behind (open jobs, wearing machines, technicians still out):
         when it is not empty the building is first reset to its seed state, before the clock starts, so the
@@ -280,12 +285,58 @@ class Walkthrough:
         if self._cancel.wait(max(0.0, seconds)):
             raise _Cancelled()
 
-    def _enter(self, key: int, minutes: int) -> None:
-        """Begin slot ``key``, which is expected to need ``minutes`` simulated minutes."""
+    def _enter(self, key: int, minutes: int, lines: list[str] | tuple[str, ...] = ()) -> None:
+        """Begin slot ``key``, which is expected to need ``minutes`` simulated minutes.
+
+        ``lines`` are explained to the viewer at even intervals across the slot: line k of n is said at
+        start + (k + 1)/(n + 1) · (end − start), so the screen never sits silent for long.
+        """
         self._slot, self._left = key, minutes
         self._deadline = None
+        self._queue_lines(list(lines), None)
 
-    def _enter_part(self, minutes: int, share: float | None) -> None:
+    def _queue_lines(self, lines: list[str], until: float | None) -> None:
+        self._lines, self._lines_n = lines, len(lines)
+        if self.auto and self.pace > 0 and self._t0 is not None and lines:
+            self._lines_from = time.monotonic()
+            self._lines_to = until if until is not None else self._slot_end(self._slot)
+        else:
+            self._lines, self._lines_n = [], 0
+
+    def _next_due(self) -> float | None:
+        if not self._lines:
+            return None
+        k = self._lines_n - len(self._lines)
+        return self._lines_from + (k + 1) / (self._lines_n + 1) * (self._lines_to - self._lines_from)
+
+    def _drip(self) -> None:
+        while self._lines and time.monotonic() >= (self._next_due() or 0.0):
+            self._say(self._lines.pop(0))
+
+    def _nap_to(self, target: float) -> None:
+        """Sleep until the wall-clock ``target``, saying each queued narration line when it falls due on the way."""
+        while True:
+            due = self._next_due()
+            if due is not None and due <= target:
+                self._nap(due - time.monotonic())
+                self._drip()
+                continue
+            self._nap(target - time.monotonic())
+            self._drip()
+            return
+
+    def _slot_at(self, frac: float) -> float:
+        """Wall-clock time ``frac`` (0..1) of the way through the current slot."""
+        assert self._t0 is not None
+        start = self._slot_end(self._slot - 1) if self._slot > 0 else self._t0
+        return start + frac * (self._slot_end(self._slot) - start)
+
+    def _hold_until(self, frac: float) -> None:
+        """Let the screen stay on what has just been said until ``frac`` of the current slot (automatic runs only)."""
+        if self.auto and self.pace > 0:
+            self._nap_to(self._slot_at(frac))
+
+    def _enter_part(self, minutes: int, share: float | None, lines: list[str] | tuple[str, ...] = ()) -> None:
         """Pace the next ``minutes`` simulated minutes to end at ``share`` of the current slot (None: at its end).
 
         deadline = start_k + share · (end_k − start_k), start_k = end_(k−1); the remaining minutes are spread
@@ -294,9 +345,11 @@ class Walkthrough:
         self._left = minutes
         if share is None or self._t0 is None:
             self._deadline = None
+            self._queue_lines(list(lines), None)
             return
         start = self._slot_end(self._slot - 1) if self._slot > 0 else self._t0
         self._deadline = start + share * (self._slot_end(self._slot) - start)
+        self._queue_lines(list(lines), self._deadline)
 
     def _slot_end(self, key: int) -> float:
         """Wall-clock end of slot ``key``; slots above 7 are rework rounds of ``REWORK_SECONDS`` each."""
@@ -319,12 +372,13 @@ class Walkthrough:
         self._left = max(0, self._left - minutes)
         calls_left = math.ceil(self._left / minutes)
         end = self._deadline if self._deadline is not None else self._slot_end(self._slot)
-        self._nap((end - time.monotonic()) / (calls_left + 1))
+        now = time.monotonic()
+        self._nap_to(now + (end - now) / (calls_left + 1))
 
     def _finish_slot(self) -> None:
         """An automatic stage that finished early waits for the end of its slot, so the clock stays on schedule."""
         if self.auto and self.pace > 0:
-            self._nap(self._slot_end(self._slot) - time.monotonic())
+            self._nap_to(self._slot_end(self._slot))
 
     def _advance(self, minutes: int, pace: str, chunk: int = 1) -> None:
         done = 0
@@ -353,7 +407,7 @@ class Walkthrough:
 
     # ------------------------------------------------------------------ stages
     def _play(self) -> None:
-        """The automatic run: wear, then stages 1–7 back to back on the one-minute schedule."""
+        """The automatic run: wear, then stages 1–7 back to back on the 150-second schedule."""
         if self.cleared:
             self.phase = "preparing"
             self.preparing = True
@@ -382,7 +436,7 @@ class Walkthrough:
         self.phase = "wear"
         self._say("A bearing starts to wear. The detector is not told.")
         self._watching = True
-        self._enter(0, 6)
+        self._enter(0, 6, ["Vibration creeps up slowly, still far below any alarm: nobody would notice yet"])
         self._advance(6, "readings")
         self.started = True
         self._finish_slot()
@@ -401,8 +455,10 @@ class Walkthrough:
 
     def _s1(self) -> dict[str, Any]:
         api = self.api()
-        self._enter(1, 3)
         asset = api.get(f"/api/assets/{self.asset_id}")
+        names = ", ".join(sn["metric"].replace("_", " ") for sn in asset["sensors"])
+        self._enter(1, 3, [f"{asset['name']} has {len(asset['sensors'])} sensors ({names}), each sending one reading per minute",
+                           "Every reading is checked on arrival: a copy is dropped, a wrong unit or unknown sensor is rejected"])
         for s in asset["sensors"]:
             api.ok("operator", "post", "/api/simulation/faults",
                    json={"asset_id": self.asset_id, "fault_type": "duplicate", "sensor_id": s["id"]})
@@ -416,7 +472,9 @@ class Walkthrough:
 
     def _s2(self) -> dict[str, Any]:
         api = self.api()
-        self._enter(2, 16)
+        self._enter(2, 16, ["Comparing the vibration with what is normal for this machine at this load",
+                            "It keeps rising: the other sensors are checked for the same pattern",
+                            "Projecting the trend forward to see when the alarm limit would be reached"])
         self._until(lambda: bool(api.get(f"/api/anomalies?state=ACTIVE&asset_id={self.asset_id}")["items"]), 240, "detect")
         a = api.get(f"/api/anomalies?state=ACTIVE&asset_id={self.asset_id}")["items"][0]
         self._say(a["explanation"])
@@ -431,7 +489,8 @@ class Walkthrough:
                 "at_detection": {s["metric"]: s["last_value"] for s in asset["sensors"] if s["last_value"] is not None}}
 
     def _s3(self) -> dict[str, Any]:
-        self._enter(3, 10)
+        self._enter(3, 10, ["Scoring the risk: how severe, how critical the machine is, how long it has lasted, how fast it rises",
+                            "Creating ONE work order; further alerts for the same problem are attached to it as evidence, never a second one"])
         self._until(lambda: bool(self._wos()), 120, "detect")
         self._advance(10, "detect")  # later alerts arrive and are attached as evidence
         wos = self._wos()
@@ -456,12 +515,14 @@ class Walkthrough:
         if standby:
             self._say(f"{standby} is the best match and is on standby, waiting for {boss}'s approval")
         # Kishore takes his time: the approval lands at the end of his slot, after he has read the request
-        # the review ends at 3/4 of his slot; the last quarter shows the approval
-        self._enter_part(2, 0.75)
+        # the review ends at 55 % of his slot, he then weighs it until 80 %, the last fifth shows the approval
+        self._enter_part(2, 0.55)
         self._say(f"{boss} opens the request: the vibration trend, the prediction and the risk score")
         self._advance(1, "detect")
         self._say(f"{boss} checks the machine's history and who can do the job")
         self._advance(1, "detect")  # more alerts may arrive meanwhile
+        self._say(f"{boss} weighs the priority against the risk and decides")
+        self._hold_until(0.80)
         wo = self._wo()
         escalated: dict[str, str] | None = None
         if wo.get("proposed_priority"):
@@ -480,6 +541,8 @@ class Walkthrough:
     def _s5(self) -> dict[str, Any]:
         api = self.api()
         self._enter(5, 1)
+        self._say("Ranking the technicians by skill, distance from the machine and current workload")
+        self._hold_until(0.28)
         wo = self._wo()
         cands = api.get(f"/api/work-orders/{wo['id']}/dispatch-candidates")["candidates"]
         best = next((c for c in cands if c["eligible"]), None)
@@ -488,7 +551,10 @@ class Walkthrough:
         res = api.ok("supervisor", "post", f"/api/work-orders/{wo['id']}/assign", json={"technician_id": best["technician_id"]})
         self._say(f"{best['name']} allocated (best match, score {best['score']:.2f}); the job appears on the crew-room screen")
         parts_ordered = self._restock(res)  # spare parts short → the job waits until a delivery arrives
-        self._advance(1, "detect")  # the message is delivered and the technician acknowledges it
+        # No simulated time passes here: the technician only starts to walk in the next step, so the whole walk
+        # (travel_minutes of it) is shown from the crew room door to the machine. The slot is narration.
+        self._queue_lines(["The job and the reserved spare parts appear on the crew-room screen",
+                           f"{best['name'].split()[0]} reads the job and gets up from the table"], None)
         res = api.get(f"/api/work-orders/{wo['id']}")
         return {"technician": best["name"], "technician_id": best["technician_id"], "status": res["status"],
                 "parts_ordered": parts_ordered, "travel_minutes": best["travel_minutes"], "priority": res["priority"],
@@ -547,9 +613,14 @@ class Walkthrough:
         plan = procedures.steps(asset_type, False)
         travel = int(self.results.get(5, {}).get("travel_minutes", 5))
         self._enter(6, travel + sum(m for _, _, m in plan) + 1)
-        self._enter_part(travel, WALK_SHARE)
+        info = api.get(f"/api/assets/{self.asset_id}")
+        legs = [f"{first} leaves the crew room and heads for the glass lift", ]
+        if info["floor_level"] != 0:
+            legs.append(f"{first} rides the lift to {info['floor_name']}")
+        legs.append(f"{first} walks along the corridor to {info['name']}")
+        self._enter_part(travel, WALK_SHARE, legs)
         self.phase = "walking"
-        self._say(f"{first} takes the tool kit and heads for {self.asset_id}")
+        self._say(f"{first} picks up the tool kit from the cabinet")
         self._until(lambda: next(t for t in api.get("/api/technicians") if t["id"] == tid)["status"] == "ON_SITE", 90, "walk")
         api.ok(user, "post", f"/api/work-orders/{wo['id']}/start", json={"note": "On site, starting work"})
         self._enter_part(sum(m for _, _, m in plan), None)
@@ -561,6 +632,7 @@ class Walkthrough:
         parts = [{"sku": p["sku"], "quantity": p["planned"]} for p in api.get(f"/api/work-orders/{wo['id']}")["parts"] if p["planned"] > 0]
         done = api.ok(user, "post", f"/api/work-orders/{wo['id']}/complete", json={
             "findings": procedures.findings(asset_type, False),
+            "photo_data": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>",
             "checklist": {k: True for k, _, _ in procedures.steps(asset_type, False)}, "parts_used": parts})
         self._say("Repair done and signed off")
         return {"status": done["status"], "findings": procedures.findings(asset_type, False)}
@@ -615,12 +687,15 @@ class Walkthrough:
         parts = [{"sku": p["sku"], "quantity": p["planned"]} for p in api.get(f"/api/work-orders/{wid}")["parts"] if p["planned"] > 0]
         api.ok(tech_user, "post", f"/api/work-orders/{wid}/complete", json={
             "findings": procedures.findings(asset_type, True),
+            "photo_data": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>",
             "checklist": {k: True for k, _, _ in plan}, "parts_used": parts})
         self._say("Rework done and signed off")
 
     def _s7(self) -> dict[str, Any]:
         api = self.api()
-        self._enter(7, 64)
+        self._enter(7, 64, ["The machine needs about 30 minutes to settle after the repair before it can be judged",
+                            "Collecting 30 fresh readings after the repair",
+                            "Comparing them with normal: vibration, temperature and current, independently of the technician"])
         wo = self._wo()
         wid = wo["id"]
         boss = self._name("supervisor")

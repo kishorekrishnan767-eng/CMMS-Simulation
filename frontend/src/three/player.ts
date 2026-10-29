@@ -1,6 +1,6 @@
 import { CREW_ROOM, CORE, LIFT } from "./constants";
 import { EXTENT, carParkSpots, cells } from "./cityMap";
-import { BMS_ROOM, BOARDROOM, COUPLES_ROOM, EXEC_OFFICES, KISHORE, MEETING_NE, SERVER_ROOM, WORKSTATIONS } from "./office";
+import { BMS_ROOM, BOARDROOM, EXEC_OFFICES, KISHORE, MEETING_NE, SERVER_ROOM, WORKSTATIONS } from "./office";
 import type { StaffPose } from "./staff";
 import { vehicle } from "./vehicle";
 
@@ -36,11 +36,12 @@ export const player = {
   distance: 0,
   /** Signed vehicle speed in metres per second. */
   speed: 0,
-  mode: "walk" as "walk" | "sit" | "lift" | "drive",
+  mode: "walk" as "walk" | "sit" | "lift" | "drive" | "heli" | "swing",
 };
 
 /** Where Kishore stands when control starts: the ground-floor lobby, facing the glass lift. */
 export const SPAWN = { x: CAR_PARKING.x, z: CAR_PARKING.z + 3.2, level: 0, yaw: Math.PI };
+export const HELICOPTER_SPAWN = { x: 30.5, z: 17, y: 2.2, yaw: 0 };
 /** Where the "sit down" interaction triggers, and where he sits. */
 export const DESK = { x: KISHORE.seat.sx, z: KISHORE.seat.sz, level: KISHORE.seat.level, yaw: KISHORE.seat.yaw, reach: 2.1 };
 /** The lift landing on every floor. */
@@ -78,7 +79,6 @@ export function obstacles(level: number): Rect[] {
   for (const w of WORKSTATIONS[l] ?? []) out.push({ x0: w.dx - 0.85, x1: w.dx + 0.85, z0: w.dz - 0.45, z1: w.dz + 0.45 });
   out.push({ x0: CORE.x - CORE.w / 2, x1: CORE.x + CORE.w / 2, z0: CORE.z - CORE.d / 2, z1: CORE.z + CORE.d / 2 });
   if (l === 1 || l === 4) out.push(...roomWalls(MEETING_NE, { side: "s", at: 8.7, w: 1.4 }));
-  if (l === 1) out.push(...roomWalls(COUPLES_ROOM, { side: "n", at: COUPLES_ROOM.doorX, w: 1.4 }));
   if (l === 2) out.push(...roomWalls(SERVER_ROOM, { side: "e", at: 10, w: 1.4 }));
   if (l === 3) {
     out.push(...roomWalls(BMS_ROOM, { side: "e", at: 10.6, w: 2.0 }, ["s", "w", "n"]));

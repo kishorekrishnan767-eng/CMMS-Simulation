@@ -31,7 +31,9 @@ test("a dirty building, one simulation at a time, and a 3D office that stays on 
   await page.getByTestId("asset-inject").click();
   await expect(page.getByTestId("wt-clock")).toBeVisible({ timeout: 30_000 });
 
-  // one simulation at a time: another machine cannot be injected while this one plays, by button or by API
+  // one simulation at a time: another machine cannot be injected while this one plays, by button or by API.
+  // (the building tree folds away while the film plays; the viewer opens it again to pick another machine)
+  await page.getByRole("button", { name: "Toggle left panel" }).click();
   await page.getByTestId("tree-CHILLER-01").click();
   await page.getByTestId("tab-asset").click();
   await expect(page.getByTestId("asset-inject")).toBeDisabled();

@@ -66,7 +66,7 @@ export interface WorkOrderDetail extends WorkOrderSummary {
   events: { id: number; action: string; from_status: string | null; to_status: string | null; actor: string; actor_role: string; note: string | null; data: Record<string, any>; occurred_at: string }[];
   evidence: Record<string, any>[]; approvals: { id: number; role: string; decision: string; comment: string | null; occurred_at: string }[];
   parts: { sku: string; name: string; planned: number; reserved: number; consumed: number }[];
-  inspections: { id: number; repair_number: number; technician_id: string; findings: string; checklist: Record<string, boolean>; parts_used: { sku: string; quantity: number }[]; labour_minutes: number; recorded_at: string }[];
+  inspections: { id: number; repair_number: number; technician_id: string; findings: string; photo_data: string; checklist: Record<string, boolean>; parts_used: { sku: string; quantity: number }[]; labour_minutes: number; recorded_at: string }[];
   verifications: { id: number; repair_number: number; outcome: string; criteria: { criteria: Criterion[] }; sample_count: number; notes: string | null; occurred_at: string }[];
   closure_checklist_required: string[];
 }

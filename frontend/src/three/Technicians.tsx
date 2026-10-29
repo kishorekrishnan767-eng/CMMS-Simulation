@@ -14,6 +14,14 @@ import { buildPath, techPose, type Pose } from "./techPath";
 export const techWorld = new Map<string, THREE.Vector3>();
 /** World Y of every technician currently riding the lift (read by the lift cab). */
 export const liftRiders = new Map<string, number>();
+/** Heading (radians, 0 = +z) and activity of every technician, refreshed every frame for the cinematic camera. */
+export interface Motion { yaw: number; inLift: boolean; phase: string }
+export const techMotion = new Map<string, Motion>();
+// test/debug hook (see main.tsx): lets automated checks ask where a technician is on screen
+if (typeof window !== "undefined") {
+  const hook = (window as unknown as { __twin?: Record<string, unknown> }).__twin;
+  if (hook) Object.assign(hook, { techWorld, techMotion });
+}
 
 const SKIN = "#c99a78";
 const TROUSERS = "#2d3640";
@@ -52,6 +60,9 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
   const look = useMemo(() => ({ chest: tech.color, sleeve: SHIRT, pants: TROUSERS, skin: SKIN, boots: BOOT, hat: HAT, stripes: true }), [tech.color]);
   const label = useRef<HTMLDivElement>(null);
   const msg = useRef<HTMLDivElement>(null);
+  const beacon = useRef<THREE.Group>(null);
+  const beaconRing = useRef<THREE.Mesh>(null);
+  const beaconArrow = useRef<THREE.Mesh>(null);
   const yaw = useRef(0);
   const smooth = useRef<THREE.Vector3 | null>(null);
   const crouch = useRef(0);
@@ -89,8 +100,22 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
     last.copy(smooth.current);
     g.position.copy(smooth.current);
     techWorld.set(tech.id, smooth.current.clone().setY(smooth.current.y + 1));
+    const motion = techMotion.get(tech.id);
+    if (motion) Object.assign(motion, { yaw: p.yaw, inLift: p.inLift, phase: p.phase });
+    else techMotion.set(tech.id, { yaw: p.yaw, inLift: p.inLift, phase: p.phase });
     if (p.inLift) liftRiders.set(tech.id, y);
     else liftRiders.delete(tech.id);
+
+    // locator: the worker the camera trails (or any worker on the walk while the film plays) glows through walls
+    const spot = ui.following === tech.id || (ui.cinematic && p.phase === "walking");
+    if (beacon.current) {
+      beacon.current.visible = spot && g.visible;
+      if (spot) {
+        const pulse = Math.sin(state.clock.elapsedTime * 4);
+        beaconRing.current?.scale.setScalar(1 + 0.12 * pulse);
+        if (beaconArrow.current) beaconArrow.current.position.y = 3.25 + 0.14 * pulse;
+      }
+    }
 
     const onSite = p.phase === "working" || p.phase === "arrived";
     const face = onSite && asset ? Math.atan2(asset.position.x - p.x, asset.position.z - p.z) : p.yaw;
@@ -223,6 +248,25 @@ const Avatar = memo(function Avatar({ tech, wo, asset, steps }: { tech: Technici
       >
         <group ref={mount("boxFloor")} position={[0.55, 0.1, 0.15]} rotation-y={0.4} visible={false}>
           <Toolbox />
+        </group>
+        <group ref={beacon} visible={false}>
+          {/* drawn without depth testing, so the worker is never lost behind a wall, a machine or the lift frame */}
+          <mesh ref={beaconRing} position={[0, 0.06, 0]} rotation-x={-Math.PI / 2} renderOrder={8}>
+            <ringGeometry args={[0.62, 0.8, 40]} />
+            <meshBasicMaterial color={tech.color} transparent opacity={0.95} depthTest={false} toneMapped={false} side={THREE.DoubleSide} />
+          </mesh>
+          <mesh position={[0, 0.07, 0]} rotation-x={-Math.PI / 2} renderOrder={8}>
+            <circleGeometry args={[0.62, 32]} />
+            <meshBasicMaterial color={tech.color} transparent opacity={0.22} depthTest={false} toneMapped={false} side={THREE.DoubleSide} />
+          </mesh>
+          <mesh position={[0, 1.15, 0]} renderOrder={7}>
+            <cylinderGeometry args={[0.7, 0.7, 2.3, 24, 1, true]} />
+            <meshBasicMaterial color={tech.color} transparent opacity={0.1} depthTest={false} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
+          </mesh>
+          <mesh ref={beaconArrow} position={[0, 3.25, 0]} rotation-x={Math.PI} renderOrder={8}>
+            <coneGeometry args={[0.2, 0.42, 4]} />
+            <meshBasicMaterial color={tech.color} depthTest={false} toneMapped={false} />
+          </mesh>
         </group>
         <Html position={[0, 2.25, 0]} center zIndexRange={[18, 0]} style={{ pointerEvents: "none" }}>
           <div className="tech-tag" data-testid={`tech-${tech.id}`} style={{ ["--vest" as string]: tech.color }}>

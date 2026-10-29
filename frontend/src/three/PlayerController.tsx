@@ -11,6 +11,7 @@ import {
   DESK, LANDING, PLAYER_LEVELS, RUN_SPEED, SPAWN, WALK_SPEED, leaveCar, nearCar, nearDesk, nearLift, player, resolve,
 } from "./player";
 import { liftRiders, techWorld } from "./Technicians";
+import { helicopter, resetHelicopter, stepHelicopter } from "./helicopter";
 import { stepVehicle, vehicle } from "./vehicle";
 
 const TYPING = /^(INPUT|TEXTAREA|SELECT)$/;
@@ -43,6 +44,7 @@ export function PlayerController() {
   const keys = useRef(new Set<string>());
   const ride = useRef<Ride | null>(null);
   const sitT = useRef(1);
+  const swing = useRef<{ anchor: THREE.Vector3; length: number; angle: number; velocity: number } | null>(null);
   const lastPrompt = useRef<string | null>(null);
   const dragging = useRef(false);
   const fpvApplied = useRef<boolean | null>(null);
@@ -151,8 +153,40 @@ export function PlayerController() {
       if (typing(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "escape") return usePlayer.getState().set({ active: false });
-      if (["w", "a", "s", "d", "e", "r", "f", " ", "arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
+      if (["w", "a", "s", "d", "e", "r", "f", "h", "v", " ", "arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k)) e.preventDefault();
       if (k === "shift") keys.current.add("shift");
+      if (!e.repeat && k === "v") {
+        if (player.mode === "swing") {
+          player.mode = "walk";
+          swing.current = null;
+        } else {
+          player.mode = "swing";
+          swing.current = {
+            anchor: new THREE.Vector3(player.x + Math.sin(player.yaw) * 8, 30 + Math.random() * 10, player.z + Math.cos(player.yaw) * 8),
+            length: 13,
+            angle: Math.PI / 2,
+            velocity: 0,
+          };
+        }
+      }
+      if (!e.repeat && k === "h") {
+        if (player.mode === "heli") {
+          player.mode = "walk";
+          player.x = helicopter.x + 2.5;
+          player.z = helicopter.z;
+          player.level = 0;
+          player.speed = 0;
+          resetHelicopter();
+        } else {
+          player.mode = "heli";
+          player.level = 0;
+          player.x = helicopter.x;
+          player.z = helicopter.z;
+          player.yaw = helicopter.yaw;
+          player.speed = 0;
+          resetHelicopter();
+        }
+      }
       if (!e.repeat && k === "e" && player.mode === "drive") {
         if (Math.abs(vehicle.v) < 3) leaveCar(); // the camera returns to his eyes on the next frame
       } else if (!e.repeat && k === "e" && nearDesk()) {
@@ -190,8 +224,13 @@ export function PlayerController() {
     if (!active || !player.active) return;
     const dt = Math.min(delta, 0.1); // a slow frame moves him further, but never far enough to skip through a wall
     const k = keys.current;
-    const fpv = player.mode !== "drive";
+    const fpv = player.mode !== "drive" && player.mode !== "heli" && player.mode !== "swing";
     setFpv(fpv);
+    if (controls && (player.mode === "heli" || player.mode === "swing")) {
+      controls.enabled = false;
+    } else if (controls) {
+      controls.enabled = true;
+    }
 
     // axes relative to where he looks
     const fx = Math.sin(player.yaw);
@@ -201,6 +240,35 @@ export function PlayerController() {
     if (fpv) {
       player.yaw += ((k.has("arrowleft") ? 1 : 0) - (k.has("arrowright") ? 1 : 0)) * 1.9 * dt;
       player.pitch = THREE.MathUtils.clamp(player.pitch + ((k.has("arrowup") ? 1 : 0) - (k.has("arrowdown") ? 1 : 0)) * 1.3 * dt, -1.3, 1.3);
+    }
+
+    if (player.mode === "swing") {
+      const anchor = swing.current;
+      if (anchor) {
+        const prevX = player.x;
+        const prevZ = player.z;
+        const boost = ((k.has("w") ? 1 : 0) - (k.has("s") ? 1 : 0));
+        const drift = ((k.has("d") ? 1 : 0) - (k.has("a") ? 1 : 0));
+        const gravity = 11.5;
+        const swingForce = (gravity / Math.max(anchor.length * 0.75, 8.5)) * Math.sin(anchor.angle);
+        anchor.velocity += (boost * 1.8 + drift * 0.6 - swingForce) * dt;
+        anchor.velocity *= 0.992;
+        anchor.angle += anchor.velocity * dt;
+
+        const x = anchor.anchor.x + Math.sin(anchor.angle) * anchor.length;
+        const z = anchor.anchor.z + Math.cos(anchor.angle) * anchor.length;
+        const look = new THREE.Vector3(Math.sin(anchor.angle), 0, Math.cos(anchor.angle));
+        player.x = x;
+        player.z = z;
+        player.yaw = Math.atan2(look.x, look.z);
+        player.distance += Math.hypot(x - prevX, z - prevZ);
+
+        if (k.has(" ")) {
+          player.mode = "walk";
+          swing.current = null;
+          player.speed = 0;
+        }
+      }
     }
 
     if (player.mode === "drive") {
@@ -213,6 +281,22 @@ export function PlayerController() {
       player.distance += Math.abs(vehicle.v) * dt;
       Object.assign(player, { x: vehicle.x, z: vehicle.z, yaw: vehicle.yaw, speed: vehicle.v });
       const kmh = Math.round(Math.abs(vehicle.v) * 3.6);
+      if (usePlayer.getState().speed !== kmh) usePlayer.getState().set({ speed: kmh });
+    } else if (player.mode === "heli") {
+      const heliInput = {
+        throttle: Math.max(0, iz) * 1.2 + (k.has("shift") ? 0.6 : 0),
+        pitch: Math.max(-1, Math.min(1, (k.has("w") ? 1 : 0) - (k.has("s") ? 1 : 0))),
+        roll: Math.max(-1, Math.min(1, (k.has("d") ? 1 : 0) - (k.has("a") ? 1 : 0))),
+        yaw: Math.max(-1, Math.min(1, (k.has("arrowright") ? 1 : 0) - (k.has("arrowleft") ? 1 : 0))),
+        brake: k.has(" "),
+      };
+      stepHelicopter(heliInput, dt);
+      player.x = helicopter.x;
+      player.z = helicopter.z;
+      player.yaw = helicopter.yaw;
+      player.speed = Math.hypot(helicopter.vx, helicopter.vz) * 3.6;
+      player.level = helicopter.y * 0.12;
+      const kmh = Math.round(player.speed);
       if (usePlayer.getState().speed !== kmh) usePlayer.getState().set({ speed: kmh });
     } else if (player.mode === "sit") {
       if (sitT.current < 1) {
@@ -281,6 +365,8 @@ export function PlayerController() {
     // context hint
     const prompt =
       player.mode === "drive" ? "W gas · S brake / reverse · A D steer · Space handbrake · E park" :
+      player.mode === "heli" ? "H land · W/S climb / descend · A/D bank · ←/→ yaw · Space brake" :
+      player.mode === "swing" ? "V exit swing · W/S power · A/D drift · Space detach" :
       player.mode === "sit" ? "Move to stand up" :
       nearDesk() ? "E  sit at the BMS desk" :
       nearCar() ? "E  get in the car" :
@@ -298,6 +384,36 @@ export function PlayerController() {
       camera.rotation.set(player.pitch, player.yaw + Math.PI, 0, "YXZ");
       const cp = Math.cos(player.pitch);
       controls.target.set(player.x + fx * cp * 3, eyeY + Math.sin(player.pitch) * 3, player.z + fz * cp * 3);
+      return;
+    }
+
+    if (player.mode === "heli") {
+      const target = new THREE.Vector3(helicopter.x, helicopter.y + 1.1, helicopter.z);
+      const forward = new THREE.Vector3(Math.sin(helicopter.yaw), 0, Math.cos(helicopter.yaw));
+      const right = new THREE.Vector3(-Math.cos(helicopter.yaw), 0, Math.sin(helicopter.yaw));
+      const desiredPos = target
+        .clone()
+        .add(forward.clone().multiplyScalar(-12.5))
+        .add(new THREE.Vector3(0, 5.2, 0))
+        .add(right.clone().multiplyScalar(0.8));
+      camera.position.lerp(desiredPos, 1 - Math.exp(-10 * dt));
+      const lookAt = target
+        .clone()
+        .add(forward.clone().multiplyScalar(8.5))
+        .add(new THREE.Vector3(0, 1.2, 0));
+      controls.target.lerp(lookAt, 1 - Math.exp(-9 * dt));
+      controls.update();
+      return;
+    }
+
+    if (player.mode === "swing") {
+      const followPos = new THREE.Vector3(player.x, 5.2, player.z);
+      const behind = new THREE.Vector3(Math.sin(player.yaw), 0, Math.cos(player.yaw)).multiplyScalar(-10.5);
+      const desiredPos = followPos.clone().add(behind).add(new THREE.Vector3(0, 4.3, 0));
+      camera.position.lerp(desiredPos, 1 - Math.exp(-12 * dt));
+      const lookAt = followPos.clone().add(new THREE.Vector3(0, 1.6, 0));
+      controls.target.lerp(lookAt, 1 - Math.exp(-11 * dt));
+      controls.update();
       return;
     }
 

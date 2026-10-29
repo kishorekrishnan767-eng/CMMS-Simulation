@@ -42,6 +42,8 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
   const { run, busy } = useAct();
   const [reason, setReason] = useState("");
   const [findings, setFindings] = useState("Inner-race spalling found on the drive-end bearing; bearing set replaced and re-greased.");
+  const [photoData, setPhotoData] = useState("");
+  const [photoError, setPhotoError] = useState("");
   const [parts, setParts] = useState<Record<string, number>>({});
   const [closure, setClosure] = useState<Record<string, boolean>>({});
   const [outcome, setOutcome] = useState("auto");
@@ -53,14 +55,14 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
   useEffect(() => {
     if (wo) setParts(Object.fromEntries(wo.parts.map((p) => [p.sku, p.planned])));
   }, [wo?.id, wo?.parts.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setReason(""); }, [id]);
+  useEffect(() => { setReason(""); setPhotoData(""); setPhotoError(""); }, [id]);
 
   const call = (action: string, body: Record<string, unknown> = {}, ok?: string) =>
     run(() => api.post(`/api/work-orders/${id}/${action}`, { note: reason || undefined, ...body }), ok ?? `${ACTION_LABEL[action]} — done`);
 
   const doAction = (a: string) => {
     if (a === "complete")
-      return call("complete", { findings, parts_used: Object.entries(parts).map(([sku, quantity]) => ({ sku, quantity })), checklist: { lockout_tagout: true, bearing_replaced: true, alignment_checked: true } });
+      return call("complete", { findings, photo_data: photoData, parts_used: Object.entries(parts).map(([sku, quantity]) => ({ sku, quantity })), checklist: { lockout_tagout: true, bearing_replaced: true, alignment_checked: true } });
     if (a === "close") return call("close", { checklist: Object.fromEntries(CLOSURE.map((k) => [k, !!closure[k]])) });
     if (a === "verify") return call("verify", { outcome });
     if (a === "acknowledge_escalation") return run(() => api.post(`/api/work-orders/${id}/acknowledge-escalation`, { accept: true, note: reason || undefined }), "Escalation acknowledged");
@@ -105,6 +107,23 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
               <div className="mt-3 space-y-2 rounded border border-line p-2 text-xs">
                 <label className="block">Findings (required)
                   <textarea className="input mt-1" rows={2} value={findings} onChange={(e) => setFindings(e.target.value)} />
+                </label>
+                <label className="block">Machine photo (required for supervisor verification)
+                  <input className="input mt-1" type="file" accept="image/*" onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 8_000_000) {
+                      e.target.value = "";
+                      setPhotoError("Choose an image up to 8 MB.");
+                      return;
+                    }
+                    setPhotoError("");
+                    const reader = new FileReader();
+                    reader.onload = () => setPhotoData(typeof reader.result === "string" ? reader.result : "");
+                    reader.readAsDataURL(file);
+                  }} />
+                  {photoError && <div className="mt-1 text-bad">{photoError}</div>}
+                  {photoData && <img className="mt-2 max-h-40 rounded border border-line object-contain" src={photoData} alt="Technician machine evidence" />}
                 </label>
                 <div className="flex flex-wrap gap-3">
                   {wo.parts.map((p) => (
@@ -188,6 +207,7 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
                 <div key={i.id} className="mb-1 rounded border border-line p-2 text-xs">
                   <b>Repair #{i.repair_number}</b> by {i.technician_id} · {fmtMin(i.labour_minutes)} labour · parts {i.parts_used.map((p) => `${p.sku}×${p.quantity}`).join(", ") || "none"}
                   <div className="text-muted">{i.findings}</div>
+                  <img className="mt-2 max-h-40 rounded border border-line object-contain" src={i.photo_data} alt={`Machine evidence for repair ${i.repair_number}`} />
                 </div>
               ))}
             </section>
@@ -196,6 +216,16 @@ export default function WorkOrderDrawer({ id, onClose }: { id: number | null; on
           {verifying && (
             <section className="rounded-md border border-line p-3" data-testid="verification-card">
               <div className="h-section mb-2">Verification (Layer 7)</div>
+              {wo.inspections.length > 0 && (() => {
+                const inspection = wo.inspections[wo.inspections.length - 1];
+                return (
+                  <div className="mb-3 rounded border border-accent/40 bg-accent/5 p-2 text-xs">
+                    <div className="font-semibold">Technician evidence for independent review</div>
+                    <div className="mt-1 text-muted">Repair report: {inspection.findings}</div>
+                    <img className="mt-2 max-h-48 rounded border border-line object-contain" src={inspection.photo_data} alt={`Technician machine evidence for repair ${inspection.repair_number}`} />
+                  </div>
+                );
+              })()}
               {ver && (
                 <>
                   <div className="mb-1 text-xs text-muted">Window: {ver.samples}/{ver.samples_required} post-repair samples after a {ver.settle_minutes} min settle {ver.ready_at ? `(ready ${fmtTime(ver.ready_at)})` : ""}</div>

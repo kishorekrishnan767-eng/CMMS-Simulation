@@ -167,6 +167,7 @@ class InspectionRecord(Base):
     technician_id: Mapped[str] = mapped_column(ForeignKey("technicians.id"))
     repair_number: Mapped[int] = mapped_column(Integer)
     findings: Mapped[str] = mapped_column(Text)
+    photo_data: Mapped[str] = mapped_column(Text)
     checklist: Mapped[dict[str, Any]] = mapped_column(JSON)
     parts_used: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
     labour_minutes: Mapped[float] = mapped_column(Float)

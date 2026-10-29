@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { useAssets } from "../api/queries";
 import { simNowMs, useLive } from "../store/live";
 import { FLOOR_H, SLAB_T, mulberry32, occupancyAt } from "./constants";
-import { BMS_ROOM, BOARDROOM, COUPLES_ROOM, EMPLOYEES, EXEC_OFFICES, MEETING_NE, SERVER_ROOM, WORKSTATIONS, type Workstation } from "./office";
+import { BMS_ROOM, BOARDROOM, EMPLOYEES, EXEC_OFFICES, MEETING_NE, SERVER_ROOM, WORKSTATIONS, type Workstation } from "./office";
 import { cap, merge, part } from "./Person";
 
 const WALL_H = FLOOR_H - SLAB_T;
@@ -380,7 +380,6 @@ export function Interior({ level, ghost }: { level: number; ghost: MutableRefObj
   const rooms = useMemo(() => {
     const out: { key: string; segs: ReturnType<typeof wallSegments> }[] = [];
     if (level === 1 || level === 4) out.push({ key: "meet", segs: wallSegments(MEETING_NE, { side: "s", at: 8.7, w: 1.4 }) });
-    if (level === 1) out.push({ key: "couples", segs: wallSegments(COUPLES_ROOM, { side: "n", at: COUPLES_ROOM.doorX, w: 1.4 }) });
     if (level === 2) out.push({ key: "server", segs: wallSegments(SERVER_ROOM, { side: "e", at: 10, w: 1.4 }) });
     if (level === 3) out.push({ key: "bms", segs: wallSegments(BMS_ROOM, { side: "e", at: 10.6, w: 2.0 }, ["s", "w", "n"]) });
     if (level === 5) {
@@ -477,7 +476,6 @@ export function Interior({ level, ghost }: { level: number; ghost: MutableRefObj
       ))}
 
       {(level === 1 || level === 4) && <MeetingRoom label={level === 1 ? "Stand-up room" : "Project room"} />}
-      {level === 1 && <CouplesRoom />}
       {level === 2 && (
         <group>
           <instancedMesh ref={racks} args={[kit.rack, mats.furn, 8]} frustumCulled={false} />
@@ -500,60 +498,6 @@ export function Interior({ level, ghost }: { level: number; ghost: MutableRefObj
         </group>
       )}
       {level === 5 && <Boardroom />}
-    </group>
-  );
-}
-
-/** Vaseem and Yasar's Couples room (Floor 1): a warm rug, a two-seat sofa and a coffee table, and its door sign. */
-function CouplesRoom() {
-  const r = COUPLES_ROOM;
-  const sign = useMemo(() => {
-    const c = document.createElement("canvas");
-    c.width = 320;
-    c.height = 80;
-    const g = c.getContext("2d")!;
-    g.fillStyle = "#3a2430";
-    g.fillRect(0, 0, 320, 80);
-    g.fillStyle = "#f7d6e0";
-    g.font = "700 28px Inter, system-ui, sans-serif";
-    g.textBaseline = "middle";
-    g.fillText("♥ Couples room", 18, 30);
-    g.fillStyle = "#e9c7d2";
-    g.font = "500 18px Inter, system-ui, sans-serif";
-    g.fillText("Vaseem & Yasar", 20, 60);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }, []);
-  return (
-    <group>
-      {/* warm rug under the two desks */}
-      <mesh rotation-x={-Math.PI / 2} position={[(r.x0 + r.x1) / 2, 0.025, (r.z0 + r.z1) / 2]}>
-        <planeGeometry args={[r.x1 - r.x0 - 0.4, r.z1 - r.z0 - 0.4]} />
-        <meshStandardMaterial color="#8c5a63" roughness={0.95} />
-      </mesh>
-      {/* two-seat sofa against the west wall, coffee table in front */}
-      <mesh position={[r.x0 + 0.55, 0.32, 6.0]}>
-        <boxGeometry args={[0.8, 0.64, 2.0]} />
-        <meshStandardMaterial color="#c0848f" roughness={0.85} />
-      </mesh>
-      <mesh position={[r.x0 + 0.25, 0.75, 6.0]}>
-        <boxGeometry args={[0.2, 0.7, 2.0]} />
-        <meshStandardMaterial color="#b0737e" roughness={0.85} />
-      </mesh>
-      <mesh position={[r.x0 + 1.6, 0.42, 6.0]}>
-        <cylinderGeometry args={[0.45, 0.45, 0.05, 24]} />
-        <meshStandardMaterial color="#d8c3a5" roughness={0.5} />
-      </mesh>
-      <mesh position={[r.x0 + 1.6, 0.2, 6.0]}>
-        <cylinderGeometry args={[0.06, 0.08, 0.4, 12]} />
-        <meshStandardMaterial color="#3b3236" roughness={0.6} />
-      </mesh>
-      {/* door sign, readable from the corridor */}
-      <mesh position={[r.doorX - 2.1, 2.75, r.z0 - 0.06]} rotation-y={Math.PI}>
-        <planeGeometry args={[2.2, 0.55]} />
-        <meshBasicMaterial map={sign} toneMapped={false} />
-      </mesh>
     </group>
   );
 }

@@ -326,6 +326,7 @@ class Autopilot:
             try:
                 self._post(user, f"/api/work-orders/{wid}/complete", {
                     "findings": procedures.findings(asset_type, rework),
+                    "photo_data": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>",
                     "checklist": {k: True for k, _, _ in procedures.steps(asset_type, rework)},
                     "parts_used": parts, "note": "Job complete, area left safe and clean"})
             except _Denied as e:

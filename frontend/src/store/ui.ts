@@ -51,6 +51,8 @@ interface UiState {
   /** Cinematic hold: once a flight lands, the camera slowly drifts around its target (any mouse input stops it). */
   cinematic: boolean;
   fps: number;
+  /** Building tree / camera buttons on the left; the run folds it away so the film has the whole view. */
+  leftPanelOpen: boolean;
   rightPanelOpen: boolean;
   /** "auto" (a machine was just clicked) shows the Process tab. */
   rightTab: "process" | "ops" | "job" | "asset" | "person" | "auto";
@@ -85,6 +87,7 @@ export const useUi = create<UiState>((set, get) => ({
   cameraGoal: { preset: "overview", nonce: 0 },
   cinematic: false,
   fps: 0,
+  leftPanelOpen: true,
   rightPanelOpen: true,
   rightTab: "process",
   selectedPersonId: null,

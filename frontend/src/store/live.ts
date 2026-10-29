@@ -137,7 +137,7 @@ export const useLive = create<LiveState>((set, get) => ({
         // screen now to the new time over the interval since the previous step, so people walk instead of jump
         const shown = simNowMs();
         const gap = to - shown;
-        const glide = gap > 0 && gap <= GLIDE_MAX_SIM_MS ? Math.min(2500, Math.max(120, now - s.clock.wallAt)) : 0;
+        const glide = gap > 0 && gap <= GLIDE_MAX_SIM_MS ? Math.min(9000, Math.max(120, now - s.clock.wallAt)) : 0;
         patch.clock = { ...s.clock, simMs: to, wallAt: now, glideFrom: glide ? shown : undefined, glideMs: glide };
       }
     } else if (e.event_type === "HealthStateChanged") {

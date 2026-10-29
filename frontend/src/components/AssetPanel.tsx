@@ -39,18 +39,18 @@ function AssetActions({ assetId, hasAnomaly, hasWorkOrder }: { assetId: string; 
   const repairing = !!ap?.expedited?.includes(assetId);
   const canRepair = wearing || hasAnomaly || hasWorkOrder;
   const playing = !!wt?.busy; // one simulation at a time
-  const wait = "A simulation is playing. Only one runs at a time: wait for it to finish (about a minute).";
+  const wait = "A simulation is playing. Only one runs at a time: wait for it to finish (about two and a half minutes).";
   if (playing && wt?.asset_id === assetId) {
     return (
       <section className="rounded-md border border-line p-3 text-[12.5px]" data-testid="asset-actions">
-        The 1-minute anomaly simulation is playing on this machine. <button className="text-accent hover:underline" onClick={() => useUi.getState().set({ rightTab: "process" })}>Open Process</button>
+        The anomaly simulation is playing on this machine. <button className="text-accent hover:underline" onClick={() => useUi.getState().set({ rightTab: "process" })}>Open Process</button>
       </section>
     );
   }
   return (
     <section className="flex flex-wrap items-center gap-2 rounded-md border border-line p-3" data-testid="asset-actions">
       <button className="btn btn-sm" disabled={busy || playing}
-        title={playing ? wait : canRepair ? "Start a fresh 1-minute simulation on this machine. Leftovers of earlier runs are cleared first." : "Start a simulated bearing wear on this machine and watch it being found and fixed, in one minute"}
+        title={playing ? wait : canRepair ? "Start a fresh simulation on this machine. Leftovers of earlier runs are cleared first." : "Start a simulated bearing wear on this machine and watch it being found and fixed, in one minute"}
         onClick={() => run(() => startWalkthrough(assetId)).then((r) => { if (r) useUi.getState().set({ rightPanelOpen: true, rightTab: "process" }); })} data-testid="asset-inject">
         ⚠ Inject anomaly
       </button>

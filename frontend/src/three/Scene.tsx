@@ -20,6 +20,7 @@ import { Ground, QUALITY, SkyAndLight } from "./SceneEnvironment";
 import { Employees } from "./People";
 import { Technicians } from "./Technicians";
 import { WorkOrderPins } from "./WorkOrderPins";
+import HelicopterModel from "./HelicopterModel";
 import PlayerCar from "./PlayerCar";
 
 function AssetModel({ asset }: { asset: Asset }) {
@@ -99,6 +100,7 @@ function Content({ orbit, interactive }: { orbit: boolean; interactive: boolean 
       <Ground />
       <City />
       <PlayerCar />
+      <HelicopterModel />
       <Building renderLevel={(level) => (byLevel.get(level) ?? []).map((a) => <AssetModel key={a.id} asset={a} />)} />
       <CutawayOutline />
       <StaticPlant />

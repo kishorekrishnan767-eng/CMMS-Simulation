@@ -396,6 +396,11 @@ def _h_complete(session: Session, wo: WorkOrder, actor: Actor, note: str | None,
     findings = str(data.get("findings") or "").strip()
     if not findings:
         raise Invalid("Findings are required to complete a work order", code="findings_required")
+    photo_data = str(data.get("photo_data") or "").strip()
+    if not photo_data.startswith("data:image/"):
+        raise Invalid("A machine photo is required to complete a work order", code="machine_photo_required")
+    if len(photo_data) > 8_000_000:
+        raise Invalid("Machine photo must be 8 MB or smaller", code="machine_photo_too_large")
     if "parts_used" not in data or not isinstance(data["parts_used"], list):
         raise Invalid("Parts used must be recorded (use an empty list if none)", code="parts_used_required")
     if wo.arrives_at is not None and now < wo.arrives_at:
@@ -411,7 +416,7 @@ def _h_complete(session: Session, wo: WorkOrder, actor: Actor, note: str | None,
     wo.repair_count = repair_no
     wo.completed_at = now
     session.add(InspectionRecord(work_order_id=wo.id, technician_id=wo.assigned_technician_id or "", repair_number=repair_no,
-                                 findings=findings, checklist=checklist, parts_used=consumed or parts_used,
+                                 findings=findings, photo_data=photo_data, checklist=checklist, parts_used=consumed or parts_used,
                                  labour_minutes=labour_min, recorded_at=now))
     tech = session.get(Technician, wo.assigned_technician_id)
     asset = session.get(Asset, wo.asset_id)

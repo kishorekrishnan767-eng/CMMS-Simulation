@@ -81,6 +81,35 @@ export function pathLength(path: Waypoint[]) {
   return total;
 }
 
+/** A named stop on a technician's route; `at` is how far along the whole route it lies (0..1, same weighting as `sampleAt`). */
+export interface RouteMark {
+  label: string;
+  at: number;
+}
+
+/**
+ * The stops of `buildPath` in plain words: crew room → tool kit → glass lift → (asset floor) → machine.
+ * Each `at` = pathLength(path up to the stop) / pathLength(path), so it lines up exactly with `Pose.distance / pathLength`.
+ */
+export function routeMarks(techId: string, asset: Asset): RouteMark[] {
+  const path = buildPath(techId, asset);
+  const total = pathLength(path) || 1;
+  const at = (i: number) => (i < 0 ? -1 : pathLength(path.slice(0, i + 1)) / total);
+  const g = CREW_ROOM.level;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
+  const tools = path.findIndex((w) => near(w.x, TOOL_CABINET.x - 0.2) && near(w.z, TOOL_CABINET.z + 1.0));
+  const lift = path.findIndex((w) => w.level === g && near(w.x, LIFT.x) && near(w.z, LIFT.landingZ));
+  const marks: RouteMark[] = [{ label: "Crew room", at: 0 }];
+  if (tools > 0) marks.push({ label: "Tool kit", at: at(tools) });
+  if (lift > 0) marks.push({ label: "Glass lift", at: at(lift) });
+  if (asset.floor_level !== g) {
+    const landing = path.findIndex((w) => w.level === asset.floor_level && near(w.x, LIFT.x) && near(w.z, LIFT.landingZ));
+    if (landing > 0) marks.push({ label: `${floorLabel(asset.floor_level)} landing`, at: at(landing) });
+  }
+  marks.push({ label: asset.name, at: 1 });
+  return marks;
+}
+
 export interface Sample {
   x: number;
   level: number;

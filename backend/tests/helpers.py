@@ -59,6 +59,7 @@ def approved_and_assigned(client: TestClient, auth, tech: str = "TECH-01") -> di
 
 REPAIR = dict(
     findings="Bearing shows spalling; replaced bearing set and re-greased.",
+    photo_data="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='1' height='1'/>",
     checklist={"lockout_tagout": True, "bearing_replaced": True},
     parts_used=[{"sku": "BRG-001", "quantity": 1}, {"sku": "GRS-001", "quantity": 1}],
 )
